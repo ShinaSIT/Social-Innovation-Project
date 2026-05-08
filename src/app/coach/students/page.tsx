@@ -1,31 +1,180 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import { createClient } from "@/utils/supabase/client";
 
-// Mock data — replace with Supabase queries
-const mockStudents = [
-  { id: "1", name: "Emma Wilson", age: 7, level: 2, category: "LFA", lastSession: "Feb 18, 2026", progress: 65 },
-  { id: "2", name: "Liam Chen", age: 5, level: 1, category: "GPA", lastSession: "Feb 18, 2026", progress: 40 },
-  { id: "3", name: "Sofia Martinez", age: 8, level: 2, category: "Development", lastSession: "Feb 17, 2026", progress: 85 },
-  { id: "4", name: "Noah Thompson", age: 5, level: 1, category: "GPA", lastSession: "Feb 16, 2026", progress: 30 },
-  { id: "5", name: "Ava Johnson", age: 9, level: 3, category: "Competitive", lastSession: "Feb 18, 2026", progress: 70 },
-  { id: "6", name: "Oliver Davis", age: 7, level: 2, category: "Development", lastSession: "Feb 18, 2026", progress: 55 },
-  { id: "7", name: "Mia Rodriguez", age: 6, level: 1, category: "GPA", lastSession: "Feb 15, 2026", progress: 20 },
-];
+interface Student {
+  id: string;
+  name: string;
+  age: number | null;
+  level: number | null;
+  category: string | null;
+  lastSession: string | null;
+  progress: number | null;
+}
 
-const todaysUpdates = [
-  { id: "5", name: "Ava Johnson", note: "Completed drill" },
-  { id: "6", name: "Oliver Davis", note: "LFA" },
-  { id: "7", name: "Mia Rodriguez", note: "LFA" },
-];
+interface PendingUpdate {
+  id: string;
+  name: string;
+  sessionDate: string;
+}
 
 export default function MyStudentsPage() {
   const [search, setSearch] = useState("");
+  const [students, setStudents] = useState<Student[]>([]);
+  const [pendingUpdates, setPendingUpdates] = useState<PendingUpdate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const filtered = mockStudents.filter((s) =>
+  useEffect(() => {
+    const fetchData = async () => {
+      const supabase = createClient();
+      setLoading(true);
+      setError(null);
+
+      try {
+        // 1. Get the logged in coach's ID
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError || !user) throw new Error("Not authenticated.");
+
+        // 2. Get swimmer IDs assigned to this coach
+        const { data: assignments, error: assignError } = await supabase
+          .from("coach_students")
+          .select("swimmer_id")
+          .eq("coach_id", user.id);
+
+        if (assignError) throw new Error("Failed to load student assignments.");
+        if (!assignments || assignments.length === 0) {
+          setStudents([]);
+          setPendingUpdates([]);
+          setLoading(false);
+          return;
+        }
+
+        const swimmerIds = assignments.map((a) => a.swimmer_id);
+
+        // 3. Fetch profiles and swimmer data for all assigned swimmers
+        const { data: profiles, error: profilesError } = await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .in("id", swimmerIds);
+
+        const { data: swimmerData, error: swimmersError } = await supabase
+          .from("swimmers")
+          .select("id, age, level, category, last_session, progress")
+          .in("id", swimmerIds);
+
+        if (profilesError || swimmersError) throw new Error("Failed to load student data.");
+
+        // 4. Merge profiles and swimmer data
+        const merged: Student[] = (profiles ?? []).map((profile) => {
+          const swimmer = swimmerData?.find((s) => s.id === profile.id);
+          return {
+            id: profile.id,
+            name: profile.full_name ?? "Unknown",
+            age: swimmer?.age ?? null,
+            level: swimmer?.level ?? null,
+            category: swimmer?.category ?? null,
+            lastSession: swimmer?.last_session ?? null,
+            progress: swimmer?.progress ?? null,
+          };
+        });
+
+        setStudents(merged);
+
+        // 5. Find sessions without reflections (for any date up to today)
+        const { data: sessions, error: sessionsError } = await supabase
+          .from("sessions")
+          .select("id, swimmer_id, session_date")
+          .in("swimmer_id", swimmerIds)
+          .eq("coach_id", user.id)
+          .eq("status", "completed")
+          .lte("session_date", new Date().toISOString().split("T")[0]);
+
+        if (sessionsError) throw new Error("Failed to load sessions.");
+
+        if (!sessions || sessions.length === 0) {
+          setPendingUpdates([]);
+          setLoading(false);
+          return;
+        }
+
+        // 6. Get session IDs that already have reflections
+        const sessionIds = sessions.map((s) => s.id);
+        const { data: reflections, error: reflectionsError } = await supabase
+          .from("session_reflections")
+          .select("session_id")
+          .in("session_id", sessionIds);
+
+        if (reflectionsError) throw new Error("Failed to load reflections.");
+
+        const reflectedSessionIds = new Set((reflections ?? []).map((r) => r.session_id));
+
+        // 7. Filter sessions without reflections, one per swimmer (most recent)
+        const unreflectedMap: Record<string, { sessionDate: string }> = {};
+        for (const session of sessions) {
+          if (!reflectedSessionIds.has(session.id)) {
+            // Keep the most recent session per swimmer
+            if (
+              !unreflectedMap[session.swimmer_id] ||
+              session.session_date > unreflectedMap[session.swimmer_id].sessionDate
+            ) {
+              unreflectedMap[session.swimmer_id] = { sessionDate: session.session_date };
+            }
+          }
+        }
+
+        // 8. Build pending updates list with swimmer names
+        const pending: PendingUpdate[] = Object.entries(unreflectedMap).map(([swimmerId, { sessionDate }]) => {
+          const student = merged.find((s) => s.id === swimmerId);
+          return {
+            id: swimmerId,
+            name: student?.name ?? "Unknown",
+            sessionDate,
+          };
+        });
+
+        setPendingUpdates(pending);
+
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  const filtered = students.filter((s) =>
     s.name.toLowerCase().includes(search.toLowerCase())
   );
+
+  function formatDate(dateStr: string | null) {
+    if (!dateStr) return "No sessions yet";
+    return new Date(dateStr).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-sm text-gray-500">Loading students...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-sm text-red-500">{error}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -34,7 +183,7 @@ export default function MyStudentsPage() {
         <Link href="/login" className="text-gray-400 hover:text-gray-600">&larr;</Link>
         <h1 className="text-xl font-bold text-gray-800">My Students</h1>
       </div>
-      <p className="mb-4 text-sm text-gray-500">{mockStudents.length} students</p>
+      <p className="mb-4 text-sm text-gray-500">{students.length} students</p>
 
       {/* Nav */}
       <div className="mb-4 flex gap-4 text-sm">
@@ -46,6 +195,9 @@ export default function MyStudentsPage() {
         </Link>
         <Link href="/coach/training" className="flex items-center gap-1 text-gray-500 hover:text-gray-700">
           <span>&#127891;</span> Training
+        </Link>
+        <Link href="/coach/profile" className="flex items-center gap-1 text-gray-500 hover:text-gray-700">
+          <span>&#128100;</span> Profile
         </Link>
       </div>
 
@@ -61,77 +213,83 @@ export default function MyStudentsPage() {
       </div>
 
       {/* Today's Updates */}
-      <div className="mb-6 rounded-xl bg-teal-50 p-4">
-        <div className="mb-2 flex items-center justify-between">
-          <div>
-            <h2 className="font-semibold text-gray-800">Today&apos;s Updates</h2>
-            <p className="text-xs text-gray-500">{todaysUpdates.length} students need lesson updates</p>
-          </div>
-          <span className="rounded-full bg-teal-500 px-2 py-0.5 text-xs text-white">{todaysUpdates.length}</span>
-        </div>
-        <div className="space-y-2">
-          {todaysUpdates.map((s) => (
-            <div key={s.id} className="flex items-center justify-between rounded-lg bg-white px-4 py-3">
-              <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-100 text-sm font-medium text-teal-700">
-                  {s.name[0]}
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-800">{s.name}</p>
-                  <p className="text-xs text-gray-500">{s.note}</p>
-                </div>
-              </div>
-              <Link
-                href={`/coach/students/${s.id}`}
-                className="rounded-full border border-teal-300 px-3 py-1 text-xs text-teal-600 hover:bg-teal-50"
-              >
-                Quick Update
-              </Link>
+      {pendingUpdates.length > 0 && (
+        <div className="mb-6 rounded-xl bg-teal-50 p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <div>
+              <h2 className="font-semibold text-gray-800">Pending Reflections</h2>
+              <p className="text-xs text-gray-500">{pendingUpdates.length} students need session reflections</p>
             </div>
-          ))}
+            <span className="rounded-full bg-teal-500 px-2 py-0.5 text-xs text-white">{pendingUpdates.length}</span>
+          </div>
+          <div className="space-y-2">
+            {pendingUpdates.map((s) => (
+              <div key={s.id} className="flex items-center justify-between rounded-lg bg-white px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-100 text-sm font-medium text-teal-700">
+                    {s.name[0]}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-800">{s.name}</p>
+                    <p className="text-xs text-gray-500">Session on {formatDate(s.sessionDate)}</p>
+                  </div>
+                </div>
+                <Link
+                  href={`/coach/students/${s.id}`}
+                  className="rounded-full border border-teal-300 px-3 py-1 text-xs text-teal-600 hover:bg-teal-50"
+                >
+                  Add Reflection
+                </Link>
+              </div>
+            ))}
+          </div>
         </div>
-        <button className="mt-3 w-full rounded-lg bg-teal-500 py-2.5 text-sm font-medium text-white hover:bg-teal-600 transition">
-          Complete All {todaysUpdates.length} Updates
-        </button>
-      </div>
+      )}
 
       {/* All Students */}
       <h2 className="mb-3 font-semibold text-gray-800">All Students</h2>
-      <div className="space-y-3">
-        {filtered.map((student) => (
-          <Link
-            key={student.id}
-            href={`/coach/students/${student.id}`}
-            className="block rounded-xl bg-white p-4 shadow-sm hover:shadow-md transition"
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-teal-100 text-sm font-medium text-teal-700">
-                  {student.name[0]}
+      {filtered.length === 0 ? (
+        <p className="text-center text-sm text-gray-500 py-8">No students found.</p>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map((student) => (
+            <Link
+              key={student.id}
+              href={`/coach/students/${student.id}`}
+              className="block rounded-xl bg-white p-4 shadow-sm hover:shadow-md transition"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-teal-100 text-sm font-medium text-teal-700">
+                    {student.name[0]}
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-800">{student.name}</p>
+                    <p className="text-xs text-gray-500">
+                      {student.age ? `Age ${student.age}` : ""}
+                      {student.level ? ` • Level ${student.level}` : ""}
+                      {student.category ? ` • ${student.category}` : ""}
+                    </p>
+                    <p className="text-xs text-gray-400">Last session: {formatDate(student.lastSession)}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-medium text-gray-800">{student.name}</p>
-                  <p className="text-xs text-gray-500">
-                    Age {student.age} &bull; Level {student.level} &bull; {student.category}
-                  </p>
-                  <p className="text-xs text-gray-400">Last lesson: {student.lastSession}</p>
+                <span className="text-xs text-gray-400">&rsaquo;</span>
+              </div>
+              {student.progress !== null && (
+                <div className="mt-3">
+                  <p className="mb-1 text-xs text-gray-500">Overall Progress: {student.progress}%</p>
+                  <div className="h-2 w-full rounded-full bg-gray-100">
+                    <div
+                      className="h-2 rounded-full bg-teal-400"
+                      style={{ width: `${student.progress}%` }}
+                    />
+                  </div>
                 </div>
-              </div>
-              <span className="text-xs text-gray-400">&rsaquo;</span>
-            </div>
-            {/* Progress bar */}
-            <div className="mt-3">
-              <p className="mb-1 text-xs text-gray-500">Overall Progress</p>
-              <div className="h-2 w-full rounded-full bg-gray-100">
-                <div
-                  className="h-2 rounded-full bg-teal-400"
-                  style={{ width: `${student.progress}%` }}
-                />
-              </div>
-            </div>
-          </Link>
-        ))}
-      </div>
+              )}
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

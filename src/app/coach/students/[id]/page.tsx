@@ -1,100 +1,89 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { createClient } from "@/utils/supabase/client";
 
 type Tab = "progress" | "reflections" | "sensory" | "milestones";
 
-// Mock student data — replace with Supabase queries
-const student = {
-  id: "1",
-  name: "Emma Wilson",
-  age: 7,
-  level: 2,
-  category: "LFA",
-};
+interface Student {
+  id: string;
+  full_name: string;
+  age: number | null;
+  level: number | null;
+  category: string | null;
+}
 
-const skillCategories = [
-  {
-    name: "Water Familiarisation",
-    description: "Building comfort and confidence in water",
-    progress: 100,
-    skills: [
-      { name: "Blows bubbles for 3 seconds", status: "Mastered" },
-      { name: "Submerges face independently", status: "Mastered" },
-    ],
-  },
-  {
-    name: "Body Control & Safety",
-    description: "Learning water safety and body awareness",
-    progress: 100,
-    skills: [
-      { name: "Back float 10 seconds", status: "Mastered" },
-      { name: "Responds to 'Stop' cue", status: "Mastered" },
-    ],
-  },
-  {
-    name: "Stroke Foundations",
-    description: "Developing basic swimming techniques",
-    progress: 60,
-    skills: [
-      { name: "Kicks 5m with board", status: "Emerging" },
-      { name: "Front glide 3 seconds", status: "Mastered" },
-    ],
-  },
-  {
-    name: "Emotional & Sensory Regulation",
-    description: "Managing emotions and sensory responses in water",
-    progress: 45,
-    skills: [
-      { name: "Recovers from distress within 2 minutes", status: "Mastered" },
-      { name: "Uses calming strategy when anxious", status: "Emerging" },
-    ],
-  },
-];
+interface SkillProgress {
+  id: string;
+  category: string;
+  skill_name: string;
+  status: "not_started" | "emerging" | "mastered";
+}
 
-const reflections = [
-  {
-    date: "February 18, 2026",
-    coachNotes: "Emma showed great progress with bubble blowing today. She's becoming more confident with face submersion.",
-    parentFeedback: "Emma was excited to tell us about blowing bubbles. She practices in the bath!",
-    mood: "happy",
-  },
-  {
-    date: "February 11, 2026",
-    coachNotes: "Worked on floating. Emma needed extra reassurance today.",
-    parentFeedback: "She seemed a bit tired before the lesson.",
-    mood: "neutral",
-  },
-];
+interface Reflection {
+  id: string;
+  coach_notes: string | null;
+  parent_feedback: string | null;
+  mood: string | null;
+  created_at: string;
+}
 
-const sensoryProfile = {
-  concentrationLevel: "Moderate",
-  noiseSensitivity: { level: 7, max: 10, label: "High" },
-  touchTolerance: { level: 4, max: 10, label: "Medium" },
-  transitionDifficulty: { level: 6, max: 10, label: "Moderate" },
-  communicationPreference: "Visual cues + verbal",
-  triggers: ["Sudden loud noises", "Crowded pool environment", "Water temperature changes"],
-  notes: "Sensitive to water temperature changes. Prefers warm water.",
-};
+interface SensoryProfile {
+  noise_sensitivity: number | null;
+  touch_tolerance: number | null;
+  transition_difficulty: number | null;
+  communication_preference: string | null;
+  known_triggers: string[];
+  additional_notes: string | null;
+  sensory_needs: string | null;
+}
 
-const milestones = [
-  { title: "First Independent Back Float", date: "January 18, 2026", description: "Held back float position for 15 seconds without support.", link: "Read Details" },
-  { title: "Completed Level 2 Skills", date: "January 15, 2026", description: "Successfully demonstrated all Level 2 core competencies.", link: "Level Achievement" },
-  { title: "Face Submersion Mastery", date: "January 26, 2025", description: "Comfortable submerging face independently for 5+ seconds.", link: "Main Competency" },
-  { title: "First Solo Pool Entry", date: "January 15, 2025", description: "Entered water independently using steps with confidence.", link: "Read Details" },
-];
+interface Milestone {
+  id: string;
+  title: string;
+  description: string | null;
+  achieved_on: string;
+  category: string | null;
+}
 
-function ProgressTab() {
+// Group skills by category and calculate progress
+function groupSkillsByCategory(skills: SkillProgress[]) {
+  const map: Record<string, SkillProgress[]> = {};
+  for (const skill of skills) {
+    if (!map[skill.category]) map[skill.category] = [];
+    map[skill.category].push(skill);
+  }
+  return Object.entries(map).map(([category, skills]) => {
+    const mastered = skills.filter((s) => s.status === "mastered").length;
+    const progress = skills.length > 0 ? Math.round((mastered / skills.length) * 100) : 0;
+    return { category, skills, progress };
+  });
+}
+
+function formatDate(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
+
+function ProgressTab({ skills }: { skills: SkillProgress[] }) {
+  const categories = groupSkillsByCategory(skills);
+
+  if (categories.length === 0) {
+    return <p className="text-sm text-gray-500 text-center py-8">No skill data available.</p>;
+  }
+
   return (
     <div className="space-y-6">
-      {skillCategories.map((cat) => (
-        <div key={cat.name} className="rounded-xl bg-white p-4 shadow-sm">
+      {categories.map((cat) => (
+        <div key={cat.category} className="rounded-xl bg-white p-4 shadow-sm">
           <div className="mb-1 flex items-center justify-between">
             <div>
-              <h3 className="font-semibold text-gray-800">{cat.name}</h3>
-              <p className="text-xs text-gray-500">{cat.description}</p>
+              <h3 className="font-semibold text-gray-800">{cat.category}</h3>
             </div>
             <span className="text-sm font-medium text-gray-600">{cat.progress}%</span>
           </div>
@@ -103,16 +92,18 @@ function ProgressTab() {
           </div>
           <div className="space-y-2">
             {cat.skills.map((skill) => (
-              <div key={skill.name} className="flex items-center justify-between">
-                <span className="text-sm text-gray-700">{skill.name}</span>
+              <div key={skill.id} className="flex items-center justify-between">
+                <span className="text-sm text-gray-700">{skill.skill_name}</span>
                 <span
-                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                    skill.status === "Mastered"
+                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${
+                    skill.status === "mastered"
                       ? "bg-teal-100 text-teal-700"
-                      : "bg-amber-100 text-amber-700"
+                      : skill.status === "emerging"
+                      ? "bg-amber-100 text-amber-700"
+                      : "bg-gray-100 text-gray-500"
                   }`}
                 >
-                  {skill.status}
+                  {skill.status.replace("_", " ")}
                 </span>
               </div>
             ))}
@@ -123,121 +114,227 @@ function ProgressTab() {
   );
 }
 
-function ReflectionsTab() {
+function ReflectionsTab({ reflections, studentId }: { reflections: Reflection[]; studentId: string }) {
   return (
     <div>
-      <button className="mb-4 w-full rounded-lg bg-teal-500 py-2.5 text-sm font-medium text-white hover:bg-teal-600 transition">
+      <Link
+        href={`/coach/students/${studentId}/reflection/new`}
+        className="mb-4 block w-full rounded-lg bg-teal-500 py-2.5 text-center text-sm font-medium text-white hover:bg-teal-600 transition"
+      >
         + Add New Reflection
-      </button>
-      <div className="space-y-6">
-        {reflections.map((r) => (
-          <div key={r.date}>
-            <p className="mb-2 text-sm font-medium text-gray-500">{r.date}</p>
-            <div className="rounded-xl bg-white p-4 shadow-sm space-y-3">
-              <div>
-                <h4 className="text-xs font-semibold text-gray-500 uppercase">Coach Notes</h4>
-                <p className="text-sm text-gray-700">{r.coachNotes}</p>
-              </div>
-              <div>
-                <h4 className="text-xs font-semibold text-gray-500 uppercase">Parent Feedback</h4>
-                <p className="text-sm text-gray-700">{r.parentFeedback}</p>
+      </Link>
+      {reflections.length === 0 ? (
+        <p className="text-sm text-gray-500 text-center py-8">No reflections yet.</p>
+      ) : (
+        <div className="space-y-6">
+          {reflections.map((r) => (
+            <div key={r.id}>
+              <p className="mb-2 text-sm font-medium text-gray-500">{formatDate(r.created_at)}</p>
+              <div className="rounded-xl bg-white p-4 shadow-sm space-y-3">
+                {r.mood && (
+                  <div>
+                    <h4 className="text-xs font-semibold text-gray-500 uppercase">Mood</h4>
+                    <p className="text-sm text-gray-700 capitalize">{r.mood}</p>
+                  </div>
+                )}
+                {r.coach_notes && (
+                  <div>
+                    <h4 className="text-xs font-semibold text-gray-500 uppercase">Coach Notes</h4>
+                    <p className="text-sm text-gray-700">{r.coach_notes}</p>
+                  </div>
+                )}
+                {r.parent_feedback && (
+                  <div>
+                    <h4 className="text-xs font-semibold text-gray-500 uppercase">Parent Feedback</h4>
+                    <p className="text-sm text-gray-700">{r.parent_feedback}</p>
+                  </div>
+                )}
               </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-function SensoryTab() {
+function SensoryTab({ profile }: { profile: SensoryProfile | null }) {
+  if (!profile) {
+    return <p className="text-sm text-gray-500 text-center py-8">No sensory profile available.</p>;
+  }
+
+  const bars = [
+    { label: "Noise Sensitivity", level: profile.noise_sensitivity },
+    { label: "Touch Tolerance", level: profile.touch_tolerance },
+    { label: "Transition Difficulty", level: profile.transition_difficulty },
+  ];
+
   return (
     <div className="space-y-4">
-      <div className="rounded-xl bg-white p-4 shadow-sm">
-        <div className="mb-1 flex items-center justify-between">
-          <div>
-            <p className="text-xs text-gray-500">Sensory Consideration Level</p>
-            <p className="font-medium text-gray-800">{sensoryProfile.concentrationLevel}</p>
-          </div>
-          <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700">MODERATE</span>
-        </div>
-      </div>
-
-      {[
-        { label: "Noise Sensitivity", ...sensoryProfile.noiseSensitivity },
-        { label: "Touch Tolerance", ...sensoryProfile.touchTolerance },
-        { label: "Transition Difficulty", ...sensoryProfile.transitionDifficulty },
-      ].map((item) => (
+      {bars.map((item) => (
         <div key={item.label} className="rounded-xl bg-white p-4 shadow-sm">
           <div className="mb-1 flex items-center justify-between">
-            <div>
-              <h3 className="font-medium text-gray-800">{item.label}</h3>
-              <p className="text-xs text-gray-500">{item.label.toLowerCase()}</p>
-            </div>
-            <span className="text-sm text-gray-600">{item.level}/{item.max}</span>
+            <h3 className="font-medium text-gray-800">{item.label}</h3>
+            <span className="text-sm text-gray-600">{item.level ?? "N/A"}/10</span>
           </div>
           <div className="h-2 w-full rounded-full bg-gray-100">
             <div
               className="h-2 rounded-full bg-amber-400"
-              style={{ width: `${(item.level / item.max) * 100}%` }}
+              style={{ width: `${((item.level ?? 0) / 10) * 100}%` }}
             />
           </div>
         </div>
       ))}
 
-      <div className="rounded-xl bg-white p-4 shadow-sm">
-        <h3 className="mb-1 font-medium text-gray-800">Communication Preference</h3>
-        <p className="text-sm text-gray-600">{sensoryProfile.communicationPreference}</p>
-      </div>
-
-      <div>
-        <h3 className="mb-2 font-medium text-gray-800">Known Triggers</h3>
+      {profile.communication_preference && (
         <div className="rounded-xl bg-white p-4 shadow-sm">
-          <ul className="space-y-1">
-            {sensoryProfile.triggers.map((t) => (
-              <li key={t} className="flex items-center gap-2 text-sm text-gray-700">
-                <span className="text-teal-500">&#10003;</span> {t}
-              </li>
-            ))}
-          </ul>
+          <h3 className="mb-1 font-medium text-gray-800">Communication Preference</h3>
+          <p className="text-sm text-gray-600">{profile.communication_preference}</p>
         </div>
-      </div>
+      )}
 
-      <div>
-        <h3 className="mb-2 font-medium text-gray-800">Additional Notes</h3>
-        <div className="rounded-xl bg-white p-4 shadow-sm">
-          <p className="text-sm text-gray-600">{sensoryProfile.notes}</p>
+      {profile.known_triggers?.length > 0 && (
+        <div>
+          <h3 className="mb-2 font-medium text-gray-800">Known Triggers</h3>
+          <div className="rounded-xl bg-white p-4 shadow-sm">
+            <ul className="space-y-1">
+              {profile.known_triggers.map((t) => (
+                <li key={t} className="flex items-center gap-2 text-sm text-gray-700">
+                  <span className="text-teal-500">&#10003;</span> {t}
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
-      </div>
+      )}
+
+      {profile.additional_notes && (
+        <div>
+          <h3 className="mb-2 font-medium text-gray-800">Additional Notes</h3>
+          <div className="rounded-xl bg-white p-4 shadow-sm">
+            <p className="text-sm text-gray-600">{profile.additional_notes}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function MilestonesTab() {
+function MilestonesTab({ milestones }: { milestones: Milestone[] }) {
   return (
     <div>
       <div className="mb-4 rounded-xl bg-teal-50 p-4">
         <p className="text-sm font-medium text-teal-800">&#127942; {milestones.length} Milestones Achieved</p>
         <p className="text-xs text-gray-500">Celebrating progress along the journey</p>
       </div>
-      <div className="relative space-y-6 border-l-2 border-teal-200 pl-6">
-        {milestones.map((m) => (
-          <div key={m.title} className="relative">
-            <div className="absolute -left-[1.85rem] top-1 h-3 w-3 rounded-full bg-teal-500" />
-            <h3 className="font-medium text-gray-800">{m.title}</h3>
-            <p className="text-xs text-gray-500">{m.date}</p>
-            <p className="mt-1 text-sm text-gray-600">{m.description}</p>
-            <button className="mt-1 text-xs text-teal-600 hover:underline">{m.link}</button>
-          </div>
-        ))}
-      </div>
+      {milestones.length === 0 ? (
+        <p className="text-sm text-gray-500 text-center py-8">No milestones yet.</p>
+      ) : (
+        <div className="relative space-y-6 border-l-2 border-teal-200 pl-6">
+          {milestones.map((m) => (
+            <div key={m.id} className="relative">
+              <div className="absolute -left-[1.85rem] top-1 h-3 w-3 rounded-full bg-teal-500" />
+              <h3 className="font-medium text-gray-800">{m.title}</h3>
+              <p className="text-xs text-gray-500">{formatDate(m.achieved_on)}</p>
+              {m.description && <p className="mt-1 text-sm text-gray-600">{m.description}</p>}
+              {m.category && (
+                <span className="mt-1 inline-block text-xs text-teal-600">{m.category}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
 export default function StudentProfilePage() {
   const params = useParams();
+  const studentId = params.id as string;
+
   const [activeTab, setActiveTab] = useState<Tab>("progress");
+  const [student, setStudent] = useState<Student | null>(null);
+  const [skills, setSkills] = useState<SkillProgress[]>([]);
+  const [reflections, setReflections] = useState<Reflection[]>([]);
+  const [sensoryProfile, setSensoryProfile] = useState<SensoryProfile | null>(null);
+  const [milestones, setMilestones] = useState<Milestone[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchAll = async () => {
+      const supabase = createClient();
+      setLoading(true);
+      setError(null);
+
+      try {
+        // Fetch student basic info
+        const { data: profileData, error: profileError } = await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .eq("id", studentId)
+          .single();
+
+        const { data: swimmerData, error: swimmerError } = await supabase
+          .from("swimmers")
+          .select("age, level, category")
+          .eq("id", studentId)
+          .single();
+
+        if (profileError || swimmerError) throw new Error("Failed to load student.");
+
+        setStudent({
+          id: profileData.id,
+          full_name: profileData.full_name ?? "Unknown",
+          age: swimmerData?.age ?? null,
+          level: swimmerData?.level ?? null,
+          category: swimmerData?.category ?? null,
+        });
+
+        // Fetch skills
+        const { data: skillsData } = await supabase
+          .from("skill_progress")
+          .select("id, category, skill_name, status")
+          .eq("swimmer_id", studentId);
+
+        setSkills(skillsData ?? []);
+
+        // Fetch reflections
+        const { data: reflectionsData } = await supabase
+          .from("session_reflections")
+          .select("id, coach_notes, parent_feedback, mood, created_at")
+          .eq("swimmer_id", studentId)
+          .order("created_at", { ascending: false });
+
+        setReflections(reflectionsData ?? []);
+
+        // Fetch sensory profile
+        const { data: sensoryData } = await supabase
+          .from("swimmer_profiles")
+          .select("noise_sensitivity, touch_tolerance, transition_difficulty, communication_preference, known_triggers, additional_notes, sensory_needs")
+          .eq("swimmer_id", studentId)
+          .single();
+
+        setSensoryProfile(sensoryData ?? null);
+
+        // Fetch milestones
+        const { data: milestonesData } = await supabase
+          .from("milestones")
+          .select("id, title, description, achieved_on, category")
+          .eq("swimmer_id", studentId)
+          .order("achieved_on", { ascending: false });
+
+        setMilestones(milestonesData ?? []);
+
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (studentId) fetchAll();
+  }, [studentId]);
 
   const tabs: { key: Tab; label: string }[] = [
     { key: "progress", label: "Progress" },
@@ -246,6 +343,22 @@ export default function StudentProfilePage() {
     { key: "milestones", label: "Milestones" },
   ];
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-sm text-gray-500">Loading student profile...</p>
+      </div>
+    );
+  }
+
+  if (error || !student) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-sm text-red-500">{error ?? "Student not found."}</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       {/* Header */}
@@ -253,12 +366,12 @@ export default function StudentProfilePage() {
 
       <div className="mb-4 flex items-center gap-4">
         <div className="flex h-14 w-14 items-center justify-center rounded-full bg-teal-100 text-xl font-bold text-teal-700">
-          {student.name[0]}
+          {student.full_name[0]}
         </div>
         <div>
-          <h1 className="text-xl font-bold text-gray-800">{student.name}</h1>
-          <p className="text-sm text-gray-500">Age {student.age} &bull; Level {student.level}</p>
-          <p className="text-xs text-gray-400">{student.category} &bull; #8</p>
+          <h1 className="text-xl font-bold text-gray-800">{student.full_name}</h1>
+          {student.age && <p className="text-sm text-gray-500">Age {student.age} {student.level ? `• Level ${student.level}` : ""}</p>}
+          {student.category && <p className="text-xs text-gray-400">{student.category}</p>}
         </div>
       </div>
 
@@ -287,10 +400,10 @@ export default function StudentProfilePage() {
       </div>
 
       {/* Tab content */}
-      {activeTab === "progress" && <ProgressTab />}
-      {activeTab === "reflections" && <ReflectionsTab />}
-      {activeTab === "sensory" && <SensoryTab />}
-      {activeTab === "milestones" && <MilestonesTab />}
+      {activeTab === "progress" && <ProgressTab skills={skills} />}
+      {activeTab === "reflections" && <ReflectionsTab reflections={reflections} studentId={studentId} />}
+      {activeTab === "sensory" && <SensoryTab profile={sensoryProfile} />}
+      {activeTab === "milestones" && <MilestonesTab milestones={milestones} />}
     </div>
   );
 }
