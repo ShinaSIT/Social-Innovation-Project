@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
+import SwimmerHeader from "@/app/swimmer/components/SwimmerHeader";
 
 interface SwimmerData {
   id: string;
@@ -220,14 +221,9 @@ export default function SwimmerDashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <SwimmerHeader />
       {/* Header with gradient */}
       <div className="bg-gradient-to-b from-teal-50 to-gray-50 px-6 pt-6 pb-8">
-        <div className="mb-4 flex items-center justify-between">
-          <Link href="/login" className="text-gray-400 hover:text-gray-600">&larr;</Link>
-          <Link href="/swimmer/profile/edit" className="text-sm text-gray-500 hover:text-teal-600">
-            &#9998; Edit Profile
-          </Link>
-        </div>
         <div className="text-center">
           <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-teal-100 text-2xl font-bold text-teal-700">
             {swimmer.name[0]}

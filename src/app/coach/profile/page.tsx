@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
+import CoachHeader from "@/app/coach/components/CoachHeader";
 
 interface CoachProfile {
   id: string;
@@ -75,6 +77,7 @@ export default function CoachProfilePage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
 
   useEffect(() => {
     fetchProfile();
@@ -278,13 +281,12 @@ export default function CoachProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gray-50">
+      <CoachHeader />
+      <div className="p-6">
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Link href="/coach/students" className="text-gray-400 hover:text-gray-600">&larr;</Link>
-          <h1 className="text-xl font-bold text-gray-800">My Profile</h1>
-        </div>
+        <h1 className="text-xl font-bold text-gray-800">My Profile</h1>
         {!editing && (
           <button
             onClick={handleEditClick}
@@ -515,6 +517,19 @@ export default function CoachProfilePage() {
           </div>
         </div>
       )}
+
+      {/* Logout */}
+      <button
+        onClick={async () => {
+          const supabase = createClient();
+          await supabase.auth.signOut();
+          router.push("/login");
+        }}
+        className="mt-8 w-full rounded-lg border border-red-200 py-3 text-sm font-medium text-red-600 hover:bg-red-50 transition"
+      >
+        Log Out
+      </button>
+      </div>
     </div>
   );
 }

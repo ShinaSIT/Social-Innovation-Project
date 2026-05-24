@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
+import SwimmerHeader from "@/app/swimmer/components/SwimmerHeader";
 
 interface FormData {
   age: string;
@@ -93,6 +95,7 @@ export default function EditSwimmerProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     fetchProfile();
@@ -272,12 +275,9 @@ export default function EditSwimmerProfilePage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <SwimmerHeader />
       {/* Header */}
       <div className="bg-gradient-to-b from-teal-50 to-gray-50 px-6 pt-6 pb-8 text-center">
-        <div className="mb-4 flex items-center justify-between">
-          <Link href="/swimmer/dashboard" className="text-gray-400 hover:text-gray-600">&larr;</Link>
-          <span />
-        </div>
         <div className="mx-auto mb-2 flex h-16 w-16 items-center justify-center rounded-full bg-teal-100 text-2xl font-bold text-teal-700">
           {swimmerName[0]}
         </div>
@@ -488,6 +488,19 @@ export default function EditSwimmerProfilePage() {
             {saving ? "Saving..." : "Save Profile"}
           </button>
         </div>
+
+        {/* Logout */}
+        <button
+          type="button"
+          onClick={async () => {
+            const supabase = createClient();
+            await supabase.auth.signOut();
+            router.push("/login");
+          }}
+          className="mt-4 w-full rounded-lg border border-red-200 py-3 text-sm font-medium text-red-600 hover:bg-red-50 transition"
+        >
+          Log Out
+        </button>
       </form>
     </div>
   );
