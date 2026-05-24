@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
+import CoachHeader from "@/app/coach/components/CoachHeader";
 
 interface Student {
   id: string;
@@ -177,29 +178,14 @@ export default function MyStudentsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gray-50">
+      <CoachHeader />
+      <div className="p-6">
       {/* Header */}
       <div className="mb-1 flex items-center gap-2">
-        <Link href="/login" className="text-gray-400 hover:text-gray-600">&larr;</Link>
         <h1 className="text-xl font-bold text-gray-800">My Students</h1>
       </div>
       <p className="mb-4 text-sm text-gray-500">{students.length} students</p>
-
-      {/* Nav */}
-      <div className="mb-4 flex gap-4 text-sm">
-        <Link href="/coach/students" className="flex items-center gap-1 text-teal-600 font-medium">
-          <span>&#128101;</span> Students
-        </Link>
-        <Link href="/coach/toolkit" className="flex items-center gap-1 text-gray-500 hover:text-gray-700">
-          <span>&#128444;</span> Visual Toolkit
-        </Link>
-        <Link href="/coach/training" className="flex items-center gap-1 text-gray-500 hover:text-gray-700">
-          <span>&#127891;</span> Training
-        </Link>
-        <Link href="/coach/profile" className="flex items-center gap-1 text-gray-500 hover:text-gray-700">
-          <span>&#128100;</span> Profile
-        </Link>
-      </div>
 
       {/* Search */}
       <div className="mb-6">
@@ -290,6 +276,7 @@ export default function MyStudentsPage() {
           ))}
         </div>
       )}
+      </div>
     </div>
   );
 }

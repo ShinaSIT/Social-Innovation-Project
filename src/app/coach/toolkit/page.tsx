@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import CoachHeader from "@/app/coach/components/CoachHeader";
 
 interface ToolkitCard {
   title: string;
@@ -31,26 +31,14 @@ export default function VisualToolkitPage() {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gray-50">
+      <CoachHeader />
+      <div className="p-6">
       {/* Header */}
-      <div className="mb-1 flex items-center gap-2">
-        <Link href="/coach/students" className="text-gray-400 hover:text-gray-600">&larr;</Link>
+      <div className="mb-1">
         <h1 className="text-xl font-bold text-gray-800">Visual Toolkit Library</h1>
       </div>
       <p className="mb-6 text-sm text-gray-500">Access visual cue cards and resources</p>
-
-      {/* Nav */}
-      <div className="mb-6 flex gap-4 text-sm">
-        <Link href="/coach/students" className="flex items-center gap-1 text-gray-500 hover:text-gray-700">
-          <span>&#128101;</span> Students
-        </Link>
-        <Link href="/coach/toolkit" className="flex items-center gap-1 text-teal-600 font-medium">
-          <span>&#128444;</span> Visual Toolkit
-        </Link>
-        <Link href="/coach/training" className="flex items-center gap-1 text-gray-500 hover:text-gray-700">
-          <span>&#127891;</span> Training
-        </Link>
-      </div>
 
       {/* Search */}
       <div className="mb-6">
@@ -95,6 +83,7 @@ export default function VisualToolkitPage() {
             </div>
           </div>
         ))}
+      </div>
       </div>
     </div>
   );

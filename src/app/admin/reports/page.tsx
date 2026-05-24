@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
+import AdminHeader from "@/app/admin/components/AdminHeader";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun, HeadingLevel, BorderStyle, WidthType, AlignmentType } from "docx";
@@ -586,9 +587,9 @@ export default function GenerateReportsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      {/* Header */}
-      <Link href="/admin/dashboard" className="mb-4 inline-block text-gray-400 hover:text-gray-600">&larr;</Link>
+    <div className="min-h-screen bg-gray-50">
+      <AdminHeader />
+      <div className="p-6">
       <h1 className="text-xl font-bold text-gray-800">Generate Reports</h1>
       <p className="mb-6 text-sm text-gray-500">Export swimmer progress and assessment data</p>
 
@@ -701,6 +702,7 @@ export default function GenerateReportsPage() {
         >
           {generating ? "Generating..." : "📊 Generate & Download"}
         </button>
+      </div>
       </div>
     </div>
   );

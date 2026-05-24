@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import CoachHeader from "@/app/coach/components/CoachHeader";
 
 type ModuleStatus = "completed" | "start" | "locked";
 
@@ -91,26 +91,14 @@ function ActionButton({ status }: { status: ModuleStatus }) {
 
 export default function CoachTrainingPage() {
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gray-50">
+      <CoachHeader />
+      <div className="p-6">
       {/* Header */}
-      <div className="mb-1 flex items-center gap-2">
-        <Link href="/coach/students" className="text-gray-400 hover:text-gray-600">&larr;</Link>
+      <div className="mb-1">
         <h1 className="text-xl font-bold text-gray-800">Coach Training</h1>
       </div>
       <p className="mb-6 text-sm text-gray-500">Autism-inclusive swim coaching certification</p>
-
-      {/* Nav */}
-      <div className="mb-6 flex gap-4 text-sm">
-        <Link href="/coach/students" className="flex items-center gap-1 text-gray-500 hover:text-gray-700">
-          <span>&#128101;</span> Students
-        </Link>
-        <Link href="/coach/toolkit" className="flex items-center gap-1 text-gray-500 hover:text-gray-700">
-          <span>&#128444;</span> Visual Toolkit
-        </Link>
-        <Link href="/coach/training" className="flex items-center gap-1 text-teal-600 font-medium">
-          <span>&#127891;</span> Training
-        </Link>
-      </div>
 
       {/* Overall Progress */}
       <div className="mb-6 rounded-xl bg-white p-4 shadow-sm">
@@ -174,6 +162,7 @@ export default function CoachTrainingPage() {
         <h3 className="font-semibold">Certification Progress</h3>
         <p className="text-sm opacity-80">Complete all 8 modules to earn your Autism-Inclusive Swim Coach certification.</p>
         <p className="mt-1 text-xs opacity-60">{completedModules} modules remaining</p>
+      </div>
       </div>
     </div>
   );

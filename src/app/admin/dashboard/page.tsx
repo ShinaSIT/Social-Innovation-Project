@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
+import AdminHeader from "@/app/admin/components/AdminHeader";
 
 interface Stats {
   totalSwimmers: number;
@@ -466,15 +467,14 @@ export default function AdminDashboardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gray-50">
+      <AdminHeader />
+      <div className="p-6">
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <div className="flex items-center gap-2">
-            <Link href="/login" className="text-gray-400 hover:text-gray-600">&larr;</Link>
-            <h1 className="text-xl font-bold text-gray-800">Admin Dashboard</h1>
-          </div>
-          <p className="text-sm text-gray-500 ml-6">{clubName}</p>
+          <h1 className="text-xl font-bold text-gray-800">Admin Dashboard</h1>
+          <p className="text-sm text-gray-500">{clubName}</p>
         </div>
         <div className="flex gap-2">
           <button
@@ -733,6 +733,7 @@ export default function AdminDashboardPage() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }
