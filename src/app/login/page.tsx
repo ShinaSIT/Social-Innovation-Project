@@ -6,6 +6,13 @@ import { createClient } from "@/utils/supabase/client";
 type Role = "coach" | "swimmer" | "admin";
 type Mode = "login" | "register";
 
+function sanitize(value: string, maxLength = 200): string {
+  return value
+    .replace(/<[^>]*>/g, "")
+    .replace(/[<>"'`]/g, "")
+    .slice(0, maxLength);
+}
+
 export default function LoginPage() {
   const [mode, setMode] = useState<Mode>("login");
   const [role, setRole] = useState<Role>("coach");
@@ -196,7 +203,7 @@ export default function LoginPage() {
                 type="email"
                 placeholder="your.email@example.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => setEmail(sanitize(e.target.value))}
                 className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:border-teal-400 focus:outline-none"
                 required
               />
@@ -232,7 +239,7 @@ export default function LoginPage() {
                 type="text"
                 placeholder="Jane Smith"
                 value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
+                onChange={(e) => setFullName(sanitize(e.target.value))}
                 className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:border-teal-400 focus:outline-none"
                 required
               />
@@ -243,7 +250,7 @@ export default function LoginPage() {
                 type="email"
                 placeholder="your.email@example.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => setEmail(sanitize(e.target.value))}
                 className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:border-teal-400 focus:outline-none"
                 required
               />
