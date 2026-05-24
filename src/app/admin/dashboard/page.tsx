@@ -331,7 +331,6 @@ export default function AdminDashboardPage() {
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      console.log("User:", user?.id);
 
       const { data: adminProfile } = await supabase
         .from("profiles")
@@ -339,7 +338,6 @@ export default function AdminDashboardPage() {
         .eq("id", user!.id)
         .single();
 
-      console.log("Admin profile:", adminProfile);
       const clubId = adminProfile?.club_id;
 
       const { data: swimmerIds, error: swimmerIdsError } = await supabase
@@ -347,17 +345,12 @@ export default function AdminDashboardPage() {
         .select("id")
         .eq("club_id", clubId);
 
-      console.log("Swimmer IDs:", swimmerIds, "Error:", swimmerIdsError);
-
       const ids = (swimmerIds ?? []).map((s) => s.id);
-      console.log("IDs array:", ids);
 
       const { data: swimmerProfiles, error: profilesError } = await supabase
         .from("profiles")
         .select("id, full_name")
         .in("id", ids);
-
-      console.log("Swimmer profiles:", swimmerProfiles, "Error:", profilesError);
 
       setAllSwimmers(
         (swimmerProfiles ?? []).map((p) => ({
