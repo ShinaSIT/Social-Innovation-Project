@@ -1,9 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
 import AdminHeader from "@/app/admin/components/AdminHeader";
+import Pagination from "@/app/components/Pagination";
+import { useFocusTrap } from "@/app/hooks/useFocusTrap";
+
+const AT_RISK_PAGE_SIZE = 5;
 
 interface Stats {
   totalSwimmers: number;
@@ -84,6 +88,11 @@ export default function AdminDashboardPage() {
   const [assignError, setAssignError] = useState<string | null>(null);
   const [assignSuccess, setAssignSuccess] = useState<string | null>(null);
   const [loadingAssignData, setLoadingAssignData] = useState(false);
+  const [atRiskPage, setAtRiskPage] = useState(1);
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  const closeAssignModal = useCallback(() => setShowAssignModal(false), []);
+  useFocusTrap(modalRef, showAssignModal, closeAssignModal);
 
   useEffect(() => {
     fetchDashboard();
@@ -462,7 +471,7 @@ export default function AdminDashboardPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <AdminHeader />
-      <div className="p-6">
+      <div id="main-content" tabIndex={-1} className="p-6">
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
@@ -474,13 +483,13 @@ export default function AdminDashboardPage() {
             onClick={openAssignModal}
             className="flex items-center gap-1 rounded-lg border border-teal-500 px-4 py-2 text-sm font-medium text-teal-600 hover:bg-teal-50 transition"
           >
-            &#128101; Assign Swimmers
+            <span aria-hidden="true">&#128101;</span> Assign Swimmers
           </button>
           <Link
             href="/admin/reports"
             className="flex items-center gap-1 rounded-lg bg-teal-500 px-4 py-2 text-sm font-medium text-white hover:bg-teal-600 transition"
           >
-            &#128202; Generate Reports
+            <span aria-hidden="true">&#128202;</span> Generate Reports
           </Link>
         </div>
       </div>
@@ -489,7 +498,7 @@ export default function AdminDashboardPage() {
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         {statCards.map((s) => (
           <div key={s.label} className="rounded-xl bg-white p-4 shadow-sm text-center">
-            <p className="text-2xl" dangerouslySetInnerHTML={{ __html: s.icon }} />
+            <p className="text-2xl" aria-hidden="true" dangerouslySetInnerHTML={{ __html: s.icon }} />
             <p className="text-2xl font-bold text-gray-800">{s.value}</p>
             <p className="text-xs text-gray-500">{s.label}</p>
           </div>
@@ -593,38 +602,64 @@ export default function AdminDashboardPage() {
 
       {/* Students Requiring Attention */}
       <div className="rounded-xl bg-white p-4 shadow-sm">
-        <h2 className="mb-4 font-semibold text-gray-800">⚠️ Students Requiring Attention</h2>
+        <h2 className="mb-4 font-semibold text-gray-800">
+          <span aria-hidden="true">⚠️</span> Students Requiring Attention
+        </h2>
         {atRiskStudents.length === 0 ? (
           <p className="text-sm text-gray-500 text-center py-4">No students require attention.</p>
         ) : (
-          <div className="space-y-3">
-            {atRiskStudents.map((s) => (
-              <div key={s.id} className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-800">{s.name}</p>
-                  <p className="text-xs text-gray-500">{s.issue}</p>
-                </div>
-                <Link
-                  href={`/coach/students/${s.id}`}
-                  className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
-                >
-                  Review
-                </Link>
-              </div>
-            ))}
-          </div>
+          <>
+            <div className="space-y-3">
+              {atRiskStudents
+                .slice((atRiskPage - 1) * AT_RISK_PAGE_SIZE, atRiskPage * AT_RISK_PAGE_SIZE)
+                .map((s) => (
+                  <div key={s.id} className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-800">{s.name}</p>
+                      <p className="text-xs text-gray-500">{s.issue}</p>
+                    </div>
+                    <Link
+                      href={`/coach/students/${s.id}`}
+                      className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                    >
+                      Review
+                    </Link>
+                  </div>
+                ))}
+            </div>
+            <Pagination
+              currentPage={atRiskPage}
+              totalItems={atRiskStudents.length}
+              pageSize={AT_RISK_PAGE_SIZE}
+              onPageChange={setAtRiskPage}
+              itemLabel="students"
+            />
+          </>
         )}
       </div>
 
       {/* Assign Modal */}
       {showAssignModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4">
-          <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeAssignModal();
+          }}
+        >
+          <div
+            ref={modalRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="assign-modal-title"
+            tabIndex={-1}
+            className="w-full max-w-md rounded-xl bg-white shadow-xl focus:outline-none"
+          >
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-gray-100 p-4">
-              <h2 className="font-semibold text-gray-800">Assign Swimmer to Coach</h2>
+              <h2 id="assign-modal-title" className="font-semibold text-gray-800">Assign Swimmer to Coach</h2>
               <button
-                onClick={() => setShowAssignModal(false)}
+                onClick={closeAssignModal}
+                aria-label="Close dialog"
                 className="text-gray-400 hover:text-gray-600 text-xl"
               >
                 &times;

@@ -289,7 +289,7 @@ export default function SwimmerDashboardPage() {
       <SwimmerHeader />
 
       {/* Header with gradient */}
-      <div className="bg-gradient-to-b from-teal-50 to-gray-50 px-6 pt-6 pb-8">
+      <div id="main-content" tabIndex={-1} className="bg-gradient-to-b from-teal-50 to-gray-50 px-6 pt-6 pb-8">
         <div className="mb-4 flex items-center justify-between">
           <div />
           <button
