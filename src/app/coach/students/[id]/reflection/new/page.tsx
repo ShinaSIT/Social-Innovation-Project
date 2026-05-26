@@ -101,11 +101,16 @@ export default function NewReflectionPage() {
     const supabase = createClient();
 
     try {
+      // Get the logged in coach's ID
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) throw new Error("Not authenticated.");
+
       const { error: insertError } = await supabase
         .from("session_reflections")
         .insert({
           session_id: sessionId,
           swimmer_id: studentId,
+          coach_id: user.id,        // 👈 this was missing
           coach_notes: coachNotes.trim(),
           parent_feedback: parentFeedback.trim() || null,
           mood,

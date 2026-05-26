@@ -61,7 +61,7 @@ export default function LoginPage() {
       return;
     }
 
-    if (role === "coach") window.location.href = "/coach/students";
+    if (role === "coach") window.location.href = "/coach/dashboard";
     else if (role === "swimmer") window.location.href = "/swimmer/dashboard";
     else window.location.href = "/admin/dashboard";
   };
