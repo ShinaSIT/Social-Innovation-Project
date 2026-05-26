@@ -379,7 +379,6 @@ export default function StudentProfilePage() {
       <div className="mb-6 flex gap-4 text-sm">
         <button className="flex items-center gap-1 text-gray-500 hover:text-teal-600">&#128200; Mood Trends</button>
         <button className="flex items-center gap-1 text-gray-500 hover:text-teal-600">&#128221; Lesson Plan</button>
-        <Link href={`/swimmer/profile/edit`} className="flex items-center gap-1 text-gray-500 hover:text-teal-600">&#9998; Edit Profile</Link>
       </div>
 
       {/* Tabs */}
