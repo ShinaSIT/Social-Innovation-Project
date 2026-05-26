@@ -30,6 +30,7 @@ interface CalendarSession {
   status: string;
   swimmer_name: string;
   swimmer_id: string;
+  notes: string | null;
 }
 
 interface AssignedSwimmer {
@@ -92,6 +93,7 @@ export default function CoachDashboardPage() {
     session_date: "",
     session_time: "",
     duration_minutes: "45",
+    notes: "",
   });
   const [scheduleError, setScheduleError] = useState<string | null>(null);
   const [scheduleSuccess, setScheduleSuccess] = useState<string | null>(null);
@@ -215,7 +217,7 @@ export default function CoachDashboardPage() {
 
     const { data: sessions } = await supabase
       .from("sessions")
-      .select("id, session_date, session_time, duration_minutes, status, swimmer_id")
+      .select("id, session_date, session_time, duration_minutes, status, swimmer_id, notes")
       .eq("coach_id", user.id)
       .gte("session_date", startOfMonth.toISOString().split("T")[0])
       .lte("session_date", endOfMonth.toISOString().split("T")[0]);
@@ -282,13 +284,14 @@ export default function CoachDashboardPage() {
         session_time: scheduleForm.session_time,
         duration_minutes: parseInt(scheduleForm.duration_minutes),
         status: "planned",
+        notes: scheduleForm.notes || null,
       });
 
     if (error) {
       setScheduleError("Failed to schedule session: " + error.message);
     } else {
       setScheduleSuccess("Session scheduled successfully!");
-      setScheduleForm({ swimmer_id: "", session_date: selectedCalendarDate, session_time: "", duration_minutes: "45" });
+      setScheduleForm({ swimmer_id: "", session_date: selectedCalendarDate, session_time: "", duration_minutes: "45", notes: "" });
       await fetchCalendarData();
       await fetchDashboard();
       setTimeout(() => {
@@ -313,6 +316,7 @@ export default function CoachDashboardPage() {
         session_time: editSession.session_time,
         duration_minutes: editSession.duration_minutes,
         status: editSession.status,
+        notes: editSession.notes || null,
       })
       .eq("id", editSession.id);
 
@@ -731,6 +735,19 @@ export default function CoachDashboardPage() {
                 </select>
               </div>
 
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Notes <span className="font-normal text-gray-400">(optional)</span>
+                </label>
+                <textarea
+                    value={scheduleForm.notes}
+                    onChange={(e) => setScheduleForm((prev) => ({ ...prev, notes: e.target.value }))}
+                    placeholder="Any notes for this session..."
+                    rows={3}
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:border-teal-400 focus:outline-none"
+                />
+                </div>
+
               {scheduleError && <p className="text-sm text-red-500">{scheduleError}</p>}
               {scheduleSuccess && <p className="text-sm text-teal-600">{scheduleSuccess}</p>}
 
@@ -816,6 +833,19 @@ export default function CoachDashboardPage() {
                   <option value="cancelled">Cancelled</option>
                 </select>
               </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Notes <span className="font-normal text-gray-400">(optional)</span>
+                </label>
+                <textarea
+                    value={editSession.notes ?? ""}
+                    onChange={(e) => setEditSession((prev) => prev ? { ...prev, notes: e.target.value } : null)}
+                    placeholder="Any notes for this session..."
+                    rows={3}
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:border-teal-400 focus:outline-none"
+                />
+               </div>
 
               {scheduleError && <p className="text-sm text-red-500">{scheduleError}</p>}
 
