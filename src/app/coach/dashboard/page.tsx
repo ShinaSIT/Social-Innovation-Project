@@ -376,7 +376,7 @@ export default function CoachDashboardPage() {
     <div className="min-h-screen bg-gray-50">
       <CoachHeader />
 
-      <div className="p-6">
+      <div id="main-content" tabIndex={-1} className="p-6">
         {/* Header */}
         <div className="mb-6 flex items-center justify-between">
           <div>

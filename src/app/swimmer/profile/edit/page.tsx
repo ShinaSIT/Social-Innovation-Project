@@ -277,7 +277,7 @@ export default function EditSwimmerProfilePage() {
     <div className="min-h-screen bg-gray-50">
       <SwimmerHeader />
       {/* Header */}
-      <div className="bg-gradient-to-b from-teal-50 to-gray-50 px-6 pt-6 pb-8 text-center">
+      <div id="main-content" tabIndex={-1} className="bg-gradient-to-b from-teal-50 to-gray-50 px-6 pt-6 pb-8 text-center">
         <div className="mx-auto mb-2 flex h-16 w-16 items-center justify-center rounded-full bg-teal-100 text-2xl font-bold text-teal-700">
           {swimmerName[0]}
         </div>

@@ -93,7 +93,7 @@ export default function CoachTrainingPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <CoachHeader />
-      <div className="p-6">
+      <div id="main-content" tabIndex={-1} className="p-6">
       {/* Header */}
       <div className="mb-1">
         <h1 className="text-xl font-bold text-gray-800">Coach Training</h1>

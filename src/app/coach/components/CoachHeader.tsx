@@ -15,31 +15,44 @@ export default function CoachHeader() {
   const pathname = usePathname();
 
   return (
-    <nav className="mb-6 flex items-center justify-between border-b border-gray-200 bg-white px-6 py-3">
-      <div className="flex gap-4 text-sm">
-        {navItems.map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex items-center gap-1 ${
-                isActive ? "text-teal-600 font-medium" : "text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              <span>{item.icon}</span> {item.label}
-            </Link>
-          );
-        })}
-      </div>
-      <Link
-        href="/coach/profile"
-        className={`flex items-center gap-1 text-sm ${
-          pathname === "/coach/profile" ? "text-teal-600 font-medium" : "text-gray-500 hover:text-gray-700"
-        }`}
+    <>
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-teal-600 focus:px-4 focus:py-2 focus:text-sm focus:text-white"
       >
-        <span>{"\u{1F464}"}</span> Profile
-      </Link>
-    </nav>
+        Skip to main content
+      </a>
+      <nav
+        aria-label="Coach navigation"
+        className="mb-6 flex items-center justify-between border-b border-gray-200 bg-white px-6 py-3"
+      >
+        <div className="flex gap-4 text-sm">
+          {navItems.map((item) => {
+            const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={isActive ? "page" : undefined}
+                className={`flex items-center gap-1 ${
+                  isActive ? "text-teal-600 font-medium" : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                <span aria-hidden="true">{item.icon}</span> {item.label}
+              </Link>
+            );
+          })}
+        </div>
+        <Link
+          href="/coach/profile"
+          aria-current={pathname === "/coach/profile" ? "page" : undefined}
+          className={`flex items-center gap-1 text-sm ${
+            pathname === "/coach/profile" ? "text-teal-600 font-medium" : "text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          <span aria-hidden="true">{"\u{1F464}"}</span> Profile
+        </Link>
+      </nav>
+    </>
   );
 }

@@ -589,7 +589,7 @@ export default function GenerateReportsPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <AdminHeader />
-      <div className="p-6">
+      <div id="main-content" tabIndex={-1} className="p-6">
       <h1 className="text-xl font-bold text-gray-800">Generate Reports</h1>
       <p className="mb-6 text-sm text-gray-500">Export swimmer progress and assessment data</p>
 

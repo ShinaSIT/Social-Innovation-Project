@@ -4,6 +4,9 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
 import CoachHeader from "@/app/coach/components/CoachHeader";
+import Pagination from "@/app/components/Pagination";
+
+const PAGE_SIZE = 10;
 
 interface Student {
   id: string;
@@ -23,6 +26,7 @@ interface PendingUpdate {
 
 export default function MyStudentsPage() {
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [students, setStudents] = useState<Student[]>([]);
   const [pendingUpdates, setPendingUpdates] = useState<PendingUpdate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -151,6 +155,7 @@ export default function MyStudentsPage() {
   const filtered = students.filter((s) =>
     s.name.toLowerCase().includes(search.toLowerCase())
   );
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   function formatDate(dateStr: string | null) {
     if (!dateStr) return "No sessions yet";
@@ -180,7 +185,7 @@ export default function MyStudentsPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <CoachHeader />
-      <div className="p-6">
+      <div id="main-content" tabIndex={-1} className="p-6">
       {/* Header */}
       <div className="mb-1 flex items-center gap-2">
         <h1 className="text-xl font-bold text-gray-800">My Students</h1>
@@ -193,7 +198,10 @@ export default function MyStudentsPage() {
           type="text"
           placeholder="Search students..."
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(1);
+          }}
           className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:border-teal-400 focus:outline-none"
         />
       </div>
@@ -238,7 +246,7 @@ export default function MyStudentsPage() {
         <p className="text-center text-sm text-gray-500 py-8">No students found.</p>
       ) : (
         <div className="space-y-3">
-          {filtered.map((student) => (
+          {paginated.map((student) => (
             <Link
               key={student.id}
               href={`/coach/students/${student.id}`}
@@ -276,6 +284,14 @@ export default function MyStudentsPage() {
           ))}
         </div>
       )}
+
+      <Pagination
+        currentPage={page}
+        totalItems={filtered.length}
+        pageSize={PAGE_SIZE}
+        onPageChange={setPage}
+        itemLabel="students"
+      />
       </div>
     </div>
   );

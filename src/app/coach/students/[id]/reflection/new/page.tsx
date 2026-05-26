@@ -157,7 +157,7 @@ export default function NewReflectionPage() {
     <div className="min-h-screen bg-gray-50">
       <CoachHeader />
 
-      <div className="px-6 pt-6 pb-8">
+      <div id="main-content" tabIndex={-1} className="px-6 pt-6 pb-8">
         {/* Back link */}
         <Link
           href={`/coach/students/${studentId}`}
