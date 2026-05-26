@@ -375,12 +375,6 @@ export default function StudentProfilePage() {
         </div>
       </div>
 
-      {/* Action links */}
-      <div className="mb-6 flex gap-4 text-sm">
-        <button className="flex items-center gap-1 text-gray-500 hover:text-teal-600">&#128200; Mood Trends</button>
-        <button className="flex items-center gap-1 text-gray-500 hover:text-teal-600">&#128221; Lesson Plan</button>
-      </div>
-
       {/* Tabs */}
       <div className="mb-6 flex rounded-lg bg-gray-100 p-1">
         {tabs.map((tab) => (
