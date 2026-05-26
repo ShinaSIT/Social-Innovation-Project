@@ -95,6 +95,7 @@ export default function EditSwimmerProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [isFirstSetup, setIsFirstSetup] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -147,6 +148,9 @@ export default function EditSwimmerProfilePage() {
         .select("conditions, sensory_needs, sensory_details, interests, noise_sensitivity, touch_tolerance, transition_difficulty, communication_preference, known_triggers, additional_notes, consent_given")
         .eq("swimmer_id", targetSwimmerId)
         .single();
+
+      // No existing profile row means this is the swimmer's first-time setup.
+      setIsFirstSetup(!swimmerProfile);
 
       setForm({
         age: swimmerData?.age?.toString() ?? "",
@@ -246,6 +250,12 @@ export default function EditSwimmerProfilePage() {
         });
 
       if (profileError) throw new Error("Failed to save profile: " + profileError.message);
+
+      // First-time setup (e.g. straight after registration) → go to the dashboard.
+      if (isFirstSetup) {
+        router.push("/swimmer/dashboard");
+        return;
+      }
 
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);

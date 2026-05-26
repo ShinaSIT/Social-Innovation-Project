@@ -112,7 +112,18 @@ export default function LoginPage() {
 
   // No manual profile insert needed — the trigger handles it!
 
-  setSuccess("Account created successfully! You can now log in.");
+  // Swimmers go straight to fill in their profile once they have a session.
+  // (data.session is null when the project requires email confirmation.)
+  if (role === "swimmer" && data.session) {
+    window.location.href = "/swimmer/profile/edit";
+    return;
+  }
+
+  setSuccess(
+    role === "swimmer"
+      ? "Account created! Please confirm your email, then log in to set up your profile."
+      : "Account created successfully! You can now log in."
+  );
   setMode("login");
   setPassword("");
   setConfirmPassword("");
