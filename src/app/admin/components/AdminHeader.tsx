@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const navItems = [
   { href: "/admin/dashboard", label: "Dashboard", icon: "\u{1F4CA}" },
   { href: "/admin/reports", label: "Reports", icon: "\u{1F4C2}" },
+  { href: "/admin/toolkit", label: "Toolkit", icon: "\u{1F4E6}" },
 ];
 
 export default function AdminHeader() {
