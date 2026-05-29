@@ -31,6 +31,10 @@ export default function MyStudentsPage() {
   const [pendingUpdates, setPendingUpdates] = useState<PendingUpdate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<"name" | "age" | "level" | "progress">("name");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  const [filterCategory, setFilterCategory] = useState<string>("");
+  const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -152,9 +156,40 @@ export default function MyStudentsPage() {
     fetchData();
   }, []);
 
-  const filtered = students.filter((s) =>
-    s.name.toLowerCase().includes(search.toLowerCase())
-  );
+  const categories = [...new Set(students.map((s) => s.category).filter(Boolean))];
+
+  const filtered = students
+    .filter((s) => {
+      const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase());
+      const matchesCategory = filterCategory ? s.category === filterCategory : true;
+      return matchesSearch && matchesCategory;
+    })
+    .sort((a, b) => {
+      let valA: any;
+      let valB: any;
+
+      switch (sortBy) {
+        case "age":
+          valA = a.age ?? 0;
+          valB = b.age ?? 0;
+          break;
+        case "level":
+          valA = a.level ?? 0;
+          valB = b.level ?? 0;
+          break;
+        case "progress":
+          valA = a.progress ?? 0;
+          valB = b.progress ?? 0;
+          break;
+        default:
+          valA = a.name.toLowerCase();
+          valB = b.name.toLowerCase();
+      }
+
+      if (valA < valB) return sortOrder === "asc" ? -1 : 1;
+      if (valA > valB) return sortOrder === "asc" ? 1 : -1;
+      return 0;
+    });
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   function formatDate(dateStr: string | null) {
@@ -194,16 +229,112 @@ export default function MyStudentsPage() {
 
       {/* Search */}
       <div className="mb-6">
-        <input
-          type="text"
-          placeholder="Search students..."
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setPage(1);
-          }}
-          className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:border-teal-400 focus:outline-none"
-        />
+        <div className="flex gap-2">
+          <input
+            type="text"
+            placeholder="Search students..."
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+            className="flex-1 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:border-teal-400 focus:outline-none"
+          />
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`rounded-lg border px-3 py-2.5 text-sm font-medium transition ${
+              showFilters || filterCategory || sortBy !== "name"
+                ? "border-teal-400 bg-teal-50 text-teal-600"
+                : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            &#9881; Filter
+          </button>
+        </div>
+
+        {/* Filter Panel */}
+        {showFilters && (
+          <div className="mt-2 rounded-xl border border-gray-200 bg-white p-4 shadow-sm space-y-4">
+            {/* Sort By */}
+            <div>
+              <p className="mb-2 text-xs font-medium text-gray-500">Sort By</p>
+              <div className="flex flex-wrap gap-2">
+                {([
+                  { key: "name", label: "Name" },
+                  { key: "age", label: "Age" },
+                  { key: "level", label: "Level" },
+                  { key: "progress", label: "Progress" },
+                ] as { key: typeof sortBy; label: string }[]).map((option) => (
+                  <button
+                    key={option.key}
+                    onClick={() => {
+                      if (sortBy === option.key) {
+                        setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+                      } else {
+                        setSortBy(option.key);
+                        setSortOrder("asc");
+                      }
+                      setPage(1);
+                    }}
+                    className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                      sortBy === option.key
+                        ? "bg-teal-500 text-white"
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    }`}
+                  >
+                    {option.label}
+                    {sortBy === option.key && (
+                      <span className="ml-1">{sortOrder === "asc" ? "↑" : "↓"}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Filter by Category */}
+            <div>
+              <p className="mb-2 text-xs font-medium text-gray-500">Category</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => { setFilterCategory(""); setPage(1); }}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                    filterCategory === ""
+                      ? "bg-teal-500 text-white"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  }`}
+                >
+                  All
+                </button>
+                {categories.map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => { setFilterCategory(cat === filterCategory ? "" : cat!); setPage(1); }}
+                    className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                      filterCategory === cat
+                        ? "bg-teal-500 text-white"
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Reset */}
+            <button
+              onClick={() => {
+                setSortBy("name");
+                setSortOrder("asc");
+                setFilterCategory("");
+                setPage(1);
+              }}
+              className="text-xs text-red-400 hover:text-red-600"
+            >
+              Reset filters
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Today's Updates */}
