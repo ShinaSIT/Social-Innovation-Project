@@ -132,13 +132,13 @@ export default function VisualToolkitPage() {
   });
 
   const categoryIcon: Record<string, string> = {
-    "Social Narrative": "📖",
-    "Safety Cue": "🛑",
-    "Skill Cue": "🏊",
-    "Schedule": "📅",
-    "Regulation Tool": "😊",
-    "Routine Template": "⏱",
-    "Safety": "⚠️",
+    "Social Narrative": "&#128214;",
+    "Safety Cue": "&#128721;",
+    "Skill Cue": "&#127946;",
+    "Schedule": "&#128197;",
+    "Regulation Tool": "&#128522;",
+    "Routine Template": "&#9201;",
+    "Safety": "&#9888;",
   };
 
   if (loading) {
@@ -219,9 +219,9 @@ export default function VisualToolkitPage() {
               <div key={item.id} className="rounded-xl bg-white shadow-sm overflow-hidden">
                 {/* Thumbnail */}
                 <div className="flex h-28 items-center justify-center bg-gradient-to-br from-teal-100 to-teal-200">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-white/60 text-2xl">
-                    {categoryIcon[item.category] ?? "📄"}
-                  </div>
+                  <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-white/60 text-2xl"
+                    dangerouslySetInnerHTML={{ __html: categoryIcon[item.category] ?? "&#128196;" }}
+                  />
                 </div>
 
                 <div className="p-4">
@@ -249,14 +249,14 @@ export default function VisualToolkitPage() {
                       disabled={!item.file_url || actionLoading === item.id}
                       className="flex-1 rounded-lg border border-gray-200 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition"
                     >
-                      {actionLoading === item.id ? "Loading..." : "👁 Preview"}
+                      {actionLoading === item.id ? "Loading..." : <><span>&#128065;</span> Preview</>}
                     </button>
                     <button
                       onClick={() => handleDownload(item)}
                       disabled={!item.file_url || actionLoading === item.id + "-download"}
                       className="flex-1 rounded-lg bg-teal-500 py-1.5 text-xs font-medium text-white hover:bg-teal-600 disabled:opacity-40 transition"
                     >
-                      {actionLoading === item.id + "-download" ? "Loading..." : "⬇ Download"}
+                      {actionLoading === item.id + "-download" ? "Loading..." : <><span>&#11015;</span> Download</>}
                     </button>
                   </div>
                 </div>
