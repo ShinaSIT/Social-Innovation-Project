@@ -505,7 +505,15 @@ export default function StudentProfilePage() {
 
       if (profileError || !profile) throw new Error("Failed to load student.");
 
-      const sw = (profile as { swimmers: { age: number | null; level: number | null; category: string | null } | null }).swimmers;
+      const rawSwimmers = (
+        profile as {
+          swimmers:
+            | { age: number | null; level: number | null; category: string | null }
+            | { age: number | null; level: number | null; category: string | null }[]
+            | null;
+        }
+      ).swimmers;
+      const sw = Array.isArray(rawSwimmers) ? rawSwimmers[0] : rawSwimmers;
       setStudent({
         id: profile.id,
         full_name: profile.full_name ?? "Unknown",
