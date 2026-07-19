@@ -56,21 +56,35 @@ export default function NewReflectionPage() {
         if (profileError) throw new Error("Failed to load student profile.");
         setStudentName(profileData.full_name ?? "Unknown");
 
-        // Fetch most recent completed session
-        const { data: sessionData, error: sessionError } = await supabase
-          .from("sessions")
-          .select("id")
-          .eq("swimmer_id", studentId)
-          .eq("status", "completed")
-          .order("session_date", { ascending: false })
-          .limit(1)
-          .single();
+        // Fetch all completed sessions for this swimmer
+          const { data: completedSessions, error: sessionError } = await supabase
+            .from("sessions")
+            .select("id")
+            .eq("swimmer_id", studentId)
+            .eq("status", "completed")
+            .order("session_date", { ascending: false });
 
-        if (sessionError || !sessionData) {
-          throw new Error("No completed session found for this student.");
-        }
+          if (sessionError || !completedSessions || completedSessions.length === 0) {
+            throw new Error("No completed session found for this student.");
+          }
 
-        setSessionId(sessionData.id);
+          // Find sessions that already have reflections
+          const sessionIds = completedSessions.map((s) => s.id);
+          const { data: existingReflections } = await supabase
+            .from("session_reflections")
+            .select("session_id")
+            .in("session_id", sessionIds);
+
+          const reflectedIds = new Set((existingReflections ?? []).map((r) => r.session_id));
+
+          // Find first session without a reflection
+          const unreflectedSession = completedSessions.find((s) => !reflectedIds.has(s.id));
+
+          if (!unreflectedSession) {
+            throw new Error("All completed sessions already have reflections.");
+          }
+
+          setSessionId(unreflectedSession.id);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "An error occurred.";
         setError(message);
