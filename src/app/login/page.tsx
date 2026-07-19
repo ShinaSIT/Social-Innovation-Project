@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 
-type Role = "coach" | "swimmer" | "admin";
 type Mode = "login" | "register";
 
 function sanitize(value: string, maxLength = 200): string {
@@ -15,7 +14,6 @@ function sanitize(value: string, maxLength = 200): string {
 
 export default function LoginPage() {
   const [mode, setMode] = useState<Mode>("login");
-  const [role, setRole] = useState<Role>("coach");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -54,75 +52,70 @@ export default function LoginPage() {
       return;
     }
 
-    if (profile.role !== role) {
-      setError(`This account is not registered as a ${role}.`);
+    // Redirect based on role
+    if (profile.role === "coach") window.location.href = "/coach/dashboard";
+    else if (profile.role === "swimmer") window.location.href = "/swimmer/dashboard";
+    else if (profile.role === "admin") window.location.href = "/admin/dashboard";
+    else {
+      setError("Unknown account role.");
       await supabase.auth.signOut();
+      setLoading(false);
+    }
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+    setLoading(true);
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
       setLoading(false);
       return;
     }
 
-    if (role === "coach") window.location.href = "/coach/dashboard";
-    else if (role === "swimmer") window.location.href = "/swimmer/dashboard";
-    else window.location.href = "/admin/dashboard";
-  };
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters.");
+      setLoading(false);
+      return;
+    }
 
-  const handleRegister = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setError(null);
-  setSuccess(null);
-  setLoading(true);
+    const supabase = createClient();
 
-  if (password !== confirmPassword) {
-    setError("Passwords do not match.");
-    setLoading(false);
-    return;
-  }
-
-  if (password.length < 6) {
-    setError("Password must be at least 6 characters.");
-    setLoading(false);
-    return;
-  }
-
-  const supabase = createClient();
-
-  // Pass role and full_name in metadata — the trigger will create the profile
-  const { data, error: authError } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: {
-        role,
-        full_name: fullName,
+    const { data, error: authError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          role: "swimmer", // 👈 always register as swimmer
+          full_name: fullName,
+        },
       },
-    },
-  });
+    });
 
-  if (authError) {
-    setError(authError.message);
+    if (authError) {
+      setError(authError.message);
+      setLoading(false);
+      return;
+    }
+
+    if (!data.user || data.user.identities?.length === 0) {
+      setError("An account with this email already exists. Please log in instead.");
+      setLoading(false);
+      return;
+    }
+
+    setSuccess("Account created successfully! You can now log in.");
+    setMode("login");
+    setPassword("");
+    setConfirmPassword("");
+    setFullName("");
     setLoading(false);
-    return;
-  }
-
-  if (!data.user || data.user.identities?.length === 0) {
-    setError("An account with this email already exists. Please log in instead.");
-    setLoading(false);
-    return;
-  }
-
-  // No manual profile insert needed — the trigger handles it!
-
-  setSuccess("Account created successfully! You can now log in.");
-  setMode("login");
-  setPassword("");
-  setConfirmPassword("");
-  setFullName("");
-  setLoading(false);
-};
+  };
 
   const switchMode = (newMode: Mode) => {
     setMode(newMode);
-    setRole("coach");
     setError(null);
     setSuccess(null);
   };
@@ -164,26 +157,6 @@ export default function LoginPage() {
           >
             Register
           </button>
-        </div>
-
-        {/* Role Selector */}
-        <div className="mb-6 flex gap-2">
-          {(mode === "register" ? ["coach", "swimmer"] : ["coach", "swimmer", "admin"] as Role[]).map((r) => (
-            <button
-              key={r}
-              onClick={() => {
-                setRole(r as Role);
-                setError(null);
-              }}
-              className={`flex-1 rounded-full py-2 text-sm font-medium capitalize transition ${
-                role === r
-                  ? "bg-teal-500 text-white"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              }`}
-            >
-              {r}
-            </button>
-          ))}
         </div>
 
         {/* Success Message */}
@@ -232,13 +205,17 @@ export default function LoginPage() {
         {/* REGISTER FORM */}
         {mode === "register" && (
           <form onSubmit={handleRegister} className="space-y-4">
+            <div className="rounded-lg bg-teal-50 px-4 py-3 text-xs text-teal-700">
+              New accounts are registered as swimmer accounts. To become a coach, register and contact your club admin.
+            </div>
+
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Full Name</label>
               <input
                 type="text"
                 placeholder="Jane Smith"
                 value={fullName}
-                onChange={(e) => setFullName(sanitize(e.target.value))}
+                onChange={(e) => setFullName(e.target.value)}
                 className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:border-teal-400 focus:outline-none"
                 required
               />

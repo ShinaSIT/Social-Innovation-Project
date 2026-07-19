@@ -51,6 +51,17 @@ interface Coach {
   isAssigned: boolean;
 }
 
+interface CoachRequest {
+  id: string;
+  swimmer_id: string;
+  swimmer_name: string;
+  message: string | null;
+  qualifications: string | null;
+  experience: string | null;
+  certifications: string | null;
+  created_at: string;
+}
+
 function getLastSixMonths(): { label: string; year: number; month: number }[] {
   const months = [];
   const now = new Date();
@@ -77,6 +88,7 @@ export default function AdminDashboardPage() {
   const [levelDistribution, setLevelDistribution] = useState<LevelDistribution[]>([]);
   const [monthlyEnrollment, setMonthlyEnrollment] = useState<MonthlyEnrollment[]>([]);
   const [clubName, setClubName] = useState<string>("Club Overview");
+  const [clubId, setClubId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -90,8 +102,13 @@ export default function AdminDashboardPage() {
   const [assignSuccess, setAssignSuccess] = useState<string | null>(null);
   const [loadingAssignData, setLoadingAssignData] = useState(false);
   const [atRiskPage, setAtRiskPage] = useState(1);
-  const modalRef = useRef<HTMLDivElement>(null);
 
+  const [coachRequests, setCoachRequests] = useState<CoachRequest[]>([]);
+  const [promotingId, setPromotingId] = useState<string | null>(null);
+  const [selectedRequest, setSelectedRequest] = useState<CoachRequest | null>(null);
+  const [showRequestModal, setShowRequestModal] = useState(false);
+
+  const modalRef = useRef<HTMLDivElement>(null);
   const closeAssignModal = useCallback(() => setShowAssignModal(false), []);
   useFocusTrap(modalRef, showAssignModal, closeAssignModal);
 
@@ -117,14 +134,15 @@ export default function AdminDashboardPage() {
 
       if (adminError) throw new Error("Failed to load admin profile.");
 
-      const clubId = adminProfile?.club_id;
+      const cId = adminProfile?.club_id;
+      setClubId(cId);
 
       // 2. Fetch club name
-      if (clubId) {
+      if (cId) {
         const { data: clubData } = await supabase
           .from("clubs")
           .select("name")
-          .eq("id", clubId)
+          .eq("id", cId)
           .single();
         setClubName(clubData?.name ?? "Club Overview");
       }
@@ -133,7 +151,7 @@ export default function AdminDashboardPage() {
       const { data: swimmers, error: swimmersError } = await supabase
         .from("swimmers")
         .select("id, level, progress, club_id")
-        .eq("club_id", clubId);
+        .eq("club_id", cId);
 
       if (swimmersError) throw new Error("Failed to load swimmers.");
 
@@ -226,14 +244,14 @@ export default function AdminDashboardPage() {
       const { data: coaches, error: coachesError } = await supabase
         .from("coaches")
         .select("id")
-        .eq("club_id", clubId)
+        .eq("club_id", cId)
         .eq("is_active", true);
 
       if (coachesError) throw new Error("Failed to load coaches.");
 
       const coachIds = (coaches ?? []).map((c) => c.id);
 
-      // 10. Coach stats — average progress of their students
+      // 10. Coach stats
       const { data: coachAssignments } = await supabase
         .from("coach_students")
         .select("coach_id, swimmer_id")
@@ -270,7 +288,7 @@ export default function AdminDashboardPage() {
 
       setCoachStats(coachStatList);
 
-      // 11. Monthly enrollment trend (last 6 months)
+      // 11. Monthly enrollment trend
       const sixMonthsAgo = new Date();
       sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
       sixMonthsAgo.setDate(1);
@@ -300,6 +318,34 @@ export default function AdminDashboardPage() {
         avgProgress,
       });
 
+      // 13. Fetch pending coach requests
+      const { data: requestsData } = await supabase
+        .from("coach_requests")
+        .select("id, swimmer_id, message, qualifications, experience, certifications, created_at")
+        .eq("status", "pending")
+        .order("created_at", { ascending: true });
+
+      const requesterIds = (requestsData ?? []).map((r) => r.swimmer_id);
+
+      if (requesterIds.length > 0) {
+        const { data: requesterProfiles } = await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .in("id", requesterIds);
+
+        const nameMap: Record<string, string> = {};
+        for (const p of requesterProfiles ?? []) nameMap[p.id] = p.full_name ?? "Unknown";
+
+        setCoachRequests(
+          (requestsData ?? []).map((r) => ({
+            ...r,
+            swimmer_name: nameMap[r.swimmer_id] ?? "Unknown",
+          }))
+        );
+      } else {
+        setCoachRequests([]);
+      }
+
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -307,32 +353,44 @@ export default function AdminDashboardPage() {
     }
   };
 
-  const maxEnrollment = Math.max(...monthlyEnrollment.map((m) => m.count), 1);
-  const levelColors = ["bg-teal-200", "bg-teal-400", "bg-teal-600", "bg-teal-800", "bg-teal-900"];
-  const pieColors = ["#99f6e4", "#2dd4bf", "#0d9488", "#134e4a", "#042f2e"];
+  const handlePromoteToCoach = async (request: CoachRequest) => {
+    setPromotingId(request.id);
+    const supabase = createClient();
 
-  const statCards = [
-    { label: "Total Swimmers", value: stats.totalSwimmers, icon: "&#128101;" },
-    { label: "Active Coaches", value: stats.activeCoaches, icon: "&#128105;&#8205;&#127891;" },
-    { label: "At Risk", value: stats.atRisk, icon: "&#9888;&#65039;" },
-    { label: "Avg Progress", value: `${stats.avgProgress}%`, icon: "&#128200;" },
-  ];
+    try {
+      const { error: roleError } = await supabase.rpc("promote_to_coach", {
+        target_user_id: request.swimmer_id,
+      });
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-sm text-gray-500">Loading dashboard...</p>
-      </div>
-    );
-  }
+      if (roleError) throw new Error("Failed to promote user: " + roleError.message);
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-sm text-red-500">{error}</p>
-      </div>
-    );
-  }
+      const { error: coachError } = await supabase
+        .from("coaches")
+        .upsert({ id: request.swimmer_id, club_id: clubId ?? null });
+
+      if (coachError) throw new Error("Failed to create coach record.");
+
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error: requestError } = await supabase
+        .from("coach_requests")
+        .update({
+          status: "approved",
+          reviewed_by: user?.id ?? null,
+          reviewed_at: new Date().toISOString(),
+        })
+        .eq("id", request.id);
+
+      if (requestError) throw new Error("Failed to update request status.");
+
+      setShowRequestModal(false);
+      setSelectedRequest(null);
+      await fetchDashboard();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setPromotingId(null);
+    }
+  };
 
   const fetchAssignData = async () => {
     const supabase = createClient();
@@ -348,16 +406,16 @@ export default function AdminDashboardPage() {
         .eq("id", user!.id)
         .single();
 
-      const clubId = adminProfile?.club_id;
+      const cId = adminProfile?.club_id;
 
-      const { data: swimmerIds, error: swimmerIdsError } = await supabase
+      const { data: swimmerIds } = await supabase
         .from("swimmers")
         .select("id")
-        .eq("club_id", clubId);
+        .eq("club_id", cId);
 
       const ids = (swimmerIds ?? []).map((s) => s.id);
 
-      const { data: swimmerProfiles, error: profilesError } = await supabase
+      const { data: swimmerProfiles } = await supabase
         .from("profiles")
         .select("id, full_name")
         .in("id", ids);
@@ -369,11 +427,10 @@ export default function AdminDashboardPage() {
         }))
       );
 
-      // Fetch all active coaches in club
       const { data: coaches } = await supabase
         .from("coaches")
         .select("id")
-        .eq("club_id", clubId)
+        .eq("club_id", cId)
         .eq("is_active", true);
 
       const coachIds = (coaches ?? []).map((c) => c.id);
@@ -432,7 +489,7 @@ export default function AdminDashboardPage() {
     if (error) {
       setAssignError("Failed to assign coach.");
     } else {
-      setAssignSuccess(`Coach assigned successfully.`);
+      setAssignSuccess("Coach assigned successfully.");
       await fetchAssignedCoaches(selectedSwimmer.id);
     }
     setAssignLoading(false);
@@ -454,7 +511,7 @@ export default function AdminDashboardPage() {
     if (error) {
       setAssignError("Failed to unassign coach.");
     } else {
-      setAssignSuccess(`Coach unassigned successfully.`);
+      setAssignSuccess("Coach unassigned successfully.");
       await fetchAssignedCoaches(selectedSwimmer.id);
     }
     setAssignLoading(false);
@@ -469,300 +526,409 @@ export default function AdminDashboardPage() {
     await fetchAssignData();
   };
 
+  const maxEnrollment = Math.max(...monthlyEnrollment.map((m) => m.count), 1);
+  const levelColors = ["bg-teal-200", "bg-teal-400", "bg-teal-600", "bg-teal-800", "bg-teal-900"];
+  const pieColors = ["#99f6e4", "#2dd4bf", "#0d9488", "#134e4a", "#042f2e"];
+
+  const statCards = [
+    { label: "Total Swimmers", value: stats.totalSwimmers, icon: "&#128101;" },
+    { label: "Active Coaches", value: stats.activeCoaches, icon: "&#128105;&#8205;&#127891;" },
+    { label: "At Risk", value: stats.atRisk, icon: "&#9888;&#65039;" },
+    { label: "Avg Progress", value: `${stats.avgProgress}%`, icon: "&#128200;" },
+  ];
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-sm text-gray-500">Loading dashboard...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-sm text-red-500">{error}</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <AdminHeader />
       <div id="main-content" tabIndex={-1} className="p-6">
-      {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-gray-800">Admin Dashboard</h1>
-          <p className="text-sm text-gray-500">{clubName}</p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={openAssignModal}
-            className="flex items-center gap-1 rounded-lg border border-teal-500 px-4 py-2 text-sm font-medium text-teal-600 hover:bg-teal-50 transition"
-          >
-            <span aria-hidden="true">&#128101;</span> Assign Swimmers
-          </button>
-          <Link
-            href="/admin/reports"
-            className="flex items-center gap-1 rounded-lg bg-teal-500 px-4 py-2 text-sm font-medium text-white hover:bg-teal-600 transition"
-          >
-            <span aria-hidden="true">&#128202;</span> Generate Reports
-          </Link>
-          <LogoutButton />
-        </div>
-      </div>
 
-      {/* Stats Cards */}
-      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-        {statCards.map((s) => (
-          <div key={s.label} className="rounded-xl bg-white p-4 shadow-sm text-center">
-            <p className="text-2xl" aria-hidden="true" dangerouslySetInnerHTML={{ __html: s.icon }} />
-            <p className="text-2xl font-bold text-gray-800">{s.value}</p>
-            <p className="text-xs text-gray-500">{s.label}</p>
+        {/* Header */}
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-gray-800">Admin Dashboard</h1>
+            <p className="text-sm text-gray-500">{clubName}</p>
           </div>
-        ))}
-      </div>
+          <div className="flex gap-2">
+            <button
+              onClick={openAssignModal}
+              className="flex items-center gap-1 rounded-lg border border-teal-500 px-4 py-2 text-sm font-medium text-teal-600 hover:bg-teal-50 transition"
+            >
+              <span aria-hidden="true">&#128101;</span> Assign Swimmers
+            </button>
+            <Link
+              href="/admin/reports"
+              className="flex items-center gap-1 rounded-lg bg-teal-500 px-4 py-2 text-sm font-medium text-white hover:bg-teal-600 transition"
+            >
+              <span aria-hidden="true">&#128202;</span> Generate Reports
+            </Link>
+            <LogoutButton />
+          </div>
+        </div>
 
-      {/* Charts Row */}
-      <div className="mb-6 grid gap-4 md:grid-cols-2">
-        {/* Swimmer Level Distribution */}
-        <div className="rounded-xl bg-white p-4 shadow-sm">
-          <h2 className="mb-4 font-semibold text-gray-800">Swimmer Level Distribution</h2>
-          {levelDistribution.length === 0 ? (
-            <p className="text-sm text-gray-500 text-center py-8">No data available.</p>
+        {/* Stats Cards */}
+        <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+          {statCards.map((s) => (
+            <div key={s.label} className="rounded-xl bg-white p-4 shadow-sm text-center">
+              <p className="text-2xl" aria-hidden="true" dangerouslySetInnerHTML={{ __html: s.icon }} />
+              <p className="text-2xl font-bold text-gray-800">{s.value}</p>
+              <p className="text-xs text-gray-500">{s.label}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Charts Row */}
+        <div className="mb-6 grid gap-4 md:grid-cols-2">
+          {/* Swimmer Level Distribution */}
+          <div className="rounded-xl bg-white p-4 shadow-sm">
+            <h2 className="mb-4 font-semibold text-gray-800">Swimmer Level Distribution</h2>
+            {levelDistribution.length === 0 ? (
+              <p className="text-sm text-gray-500 text-center py-8">No data available.</p>
+            ) : (
+              <div className="flex items-center justify-center gap-6">
+                <div className="relative h-32 w-32">
+                  <svg viewBox="0 0 36 36" className="h-32 w-32 -rotate-90">
+                    {(() => {
+                      const total = levelDistribution.reduce((a, b) => a + b.count, 0);
+                      let offset = 0;
+                      return levelDistribution.map((level, i) => {
+                        const pct = (level.count / total) * 100;
+                        const el = (
+                          <circle
+                            key={level.level}
+                            cx="18" cy="18" r="15.9155"
+                            fill="transparent"
+                            stroke={pieColors[i % pieColors.length]}
+                            strokeWidth="3.5"
+                            strokeDasharray={`${pct} ${100 - pct}`}
+                            strokeDashoffset={`${-offset}`}
+                          />
+                        );
+                        offset += pct;
+                        return el;
+                      });
+                    })()}
+                  </svg>
+                </div>
+                <div className="space-y-2">
+                  {levelDistribution.map((l, i) => (
+                    <div key={l.level} className="flex items-center gap-2 text-sm">
+                      <div className={`h-3 w-3 rounded-full ${levelColors[i % levelColors.length]}`} />
+                      <span className="text-gray-600">{l.level} ({l.count})</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Monthly Enrollment Trend */}
+          <div className="rounded-xl bg-white p-4 shadow-sm">
+            <h2 className="mb-4 font-semibold text-gray-800">Monthly Enrollment Trend</h2>
+            <div className="flex items-end gap-3 h-40">
+              {monthlyEnrollment.map((m) => (
+                <div key={m.month} className="flex flex-1 flex-col items-center">
+                  <p className="mb-1 text-xs text-gray-600">{m.count}</p>
+                  <div
+                    className="w-full rounded-t bg-teal-400"
+                    style={{ height: `${(m.count / maxEnrollment) * 100}px` }}
+                  />
+                  <p className="mt-1 text-xs text-gray-500">{m.month}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Coach Student Progress */}
+        <div className="mb-6 rounded-xl bg-white p-4 shadow-sm">
+          <h2 className="mb-4 font-semibold text-gray-800">Coach Student Progress</h2>
+          {coachStats.length === 0 ? (
+            <p className="text-sm text-gray-500 text-center py-4">No coach data available.</p>
           ) : (
-            <div className="flex items-center justify-center gap-6">
-              <div className="relative h-32 w-32">
-                <svg viewBox="0 0 36 36" className="h-32 w-32 -rotate-90">
-                  {(() => {
-                    const total = levelDistribution.reduce((a, b) => a + b.count, 0);
-                    let offset = 0;
-                    return levelDistribution.map((level, i) => {
-                      const pct = (level.count / total) * 100;
-                      const el = (
-                        <circle
-                          key={level.level}
-                          cx="18" cy="18" r="15.9155"
-                          fill="transparent"
-                          stroke={pieColors[i % pieColors.length]}
-                          strokeWidth="3.5"
-                          strokeDasharray={`${pct} ${100 - pct}`}
-                          strokeDashoffset={`${-offset}`}
-                        />
-                      );
-                      offset += pct;
-                      return el;
-                    });
-                  })()}
-                </svg>
-              </div>
-              <div className="space-y-2">
-                {levelDistribution.map((l, i) => (
-                  <div key={l.level} className="flex items-center gap-2 text-sm">
-                    <div className={`h-3 w-3 rounded-full ${levelColors[i % levelColors.length]}`} />
-                    <span className="text-gray-600">{l.level} ({l.count})</span>
+            <div className="space-y-3">
+              {coachStats.map((coach) => (
+                <div key={coach.id} className="flex items-center gap-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-100 text-xs font-medium text-teal-700">
+                    {coach.name.split(" ").map((n) => n[0]).join("")}
                   </div>
-                ))}
-              </div>
+                  <div className="flex-1">
+                    <div className="mb-1 flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-700">{coach.name}</span>
+                      <span className="text-xs text-gray-500">
+                        {coach.studentCount} students • {coach.avgProgress}% avg
+                      </span>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-gray-100">
+                      <div
+                        className="h-2 rounded-full bg-teal-400"
+                        style={{ width: `${coach.avgProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
 
-        {/* Monthly Enrollment Trend */}
-        <div className="rounded-xl bg-white p-4 shadow-sm">
-          <h2 className="mb-4 font-semibold text-gray-800">Monthly Enrollment Trend</h2>
-          <div className="flex items-end gap-3 h-40">
-            {monthlyEnrollment.map((m) => (
-              <div key={m.month} className="flex flex-1 flex-col items-center">
-                <p className="mb-1 text-xs text-gray-600">{m.count}</p>
-                <div
-                  className="w-full rounded-t bg-teal-400"
-                  style={{ height: `${(m.count / maxEnrollment) * 100}px` }}
-                />
-                <p className="mt-1 text-xs text-gray-500">{m.month}</p>
+        {/* Students Requiring Attention */}
+        <div className="mb-6 rounded-xl bg-white p-4 shadow-sm">
+          <h2 className="mb-4 font-semibold text-gray-800">
+            <span aria-hidden="true">⚠️</span> Students Requiring Attention
+          </h2>
+          {atRiskStudents.length === 0 ? (
+            <p className="text-sm text-gray-500 text-center py-4">No students require attention.</p>
+          ) : (
+            <>
+              <div className="space-y-3">
+                {atRiskStudents
+                  .slice((atRiskPage - 1) * AT_RISK_PAGE_SIZE, atRiskPage * AT_RISK_PAGE_SIZE)
+                  .map((s) => (
+                    <div key={s.id} className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-800">{s.name}</p>
+                        <p className="text-xs text-gray-500">{s.issue}</p>
+                      </div>
+                      <Link
+                        href={`/coach/students/${s.id}`}
+                        className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                      >
+                        Review
+                      </Link>
+                    </div>
+                  ))}
               </div>
-            ))}
-          </div>
+              <Pagination
+                currentPage={atRiskPage}
+                totalItems={atRiskStudents.length}
+                pageSize={AT_RISK_PAGE_SIZE}
+                onPageChange={setAtRiskPage}
+                itemLabel="students"
+              />
+            </>
+          )}
         </div>
-      </div>
 
-      {/* Coach Student Progress */}
-      <div className="mb-6 rounded-xl bg-white p-4 shadow-sm">
-        <h2 className="mb-4 font-semibold text-gray-800">Coach Student Progress</h2>
-        {coachStats.length === 0 ? (
-          <p className="text-sm text-gray-500 text-center py-4">No coach data available.</p>
-        ) : (
-          <div className="space-y-3">
-            {coachStats.map((coach) => (
-              <div key={coach.id} className="flex items-center gap-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-100 text-xs font-medium text-teal-700">
-                  {coach.name.split(" ").map((n) => n[0]).join("")}
-                </div>
-                <div className="flex-1">
-                  <div className="mb-1 flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-700">{coach.name}</span>
-                    <span className="text-xs text-gray-500">
-                      {coach.studentCount} students • {coach.avgProgress}% avg
-                    </span>
-                  </div>
-                  <div className="h-2 w-full rounded-full bg-gray-100">
-                    <div
-                      className="h-2 rounded-full bg-teal-400"
-                      style={{ width: `${coach.avgProgress}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Students Requiring Attention */}
-      <div className="rounded-xl bg-white p-4 shadow-sm">
-        <h2 className="mb-4 font-semibold text-gray-800">
-          <span aria-hidden="true">⚠️</span> Students Requiring Attention
-        </h2>
-        {atRiskStudents.length === 0 ? (
-          <p className="text-sm text-gray-500 text-center py-4">No students require attention.</p>
-        ) : (
-          <>
+        {/* Coach Applications Section */}
+        {coachRequests.length > 0 && (
+          <div className="mb-6 rounded-xl bg-white p-4 shadow-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="font-semibold text-gray-800">&#127941; Coach Applications</h2>
+              <span className="rounded-full bg-amber-500 px-2 py-0.5 text-xs text-white">
+                {coachRequests.length} pending
+              </span>
+            </div>
             <div className="space-y-3">
-              {atRiskStudents
-                .slice((atRiskPage - 1) * AT_RISK_PAGE_SIZE, atRiskPage * AT_RISK_PAGE_SIZE)
-                .map((s) => (
-                  <div key={s.id} className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-800">{s.name}</p>
-                      <p className="text-xs text-gray-500">{s.issue}</p>
+              {coachRequests.map((request) => (
+                <div key={request.id} className="flex items-center justify-between rounded-lg border border-gray-100 px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-100 text-sm font-bold text-amber-700">
+                      {request.swimmer_name[0]}
                     </div>
-                    <Link
-                      href={`/coach/students/${s.id}`}
-                      className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
-                    >
-                      Review
-                    </Link>
-                  </div>
-                ))}
-            </div>
-            <Pagination
-              currentPage={atRiskPage}
-              totalItems={atRiskStudents.length}
-              pageSize={AT_RISK_PAGE_SIZE}
-              onPageChange={setAtRiskPage}
-              itemLabel="students"
-            />
-          </>
-        )}
-      </div>
-
-      {/* Assign Modal */}
-      {showAssignModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) closeAssignModal();
-          }}
-        >
-          <div
-            ref={modalRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="assign-modal-title"
-            tabIndex={-1}
-            className="w-full max-w-md rounded-xl bg-white shadow-xl focus:outline-none"
-          >
-            {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-gray-100 p-4">
-              <h2 id="assign-modal-title" className="font-semibold text-gray-800">Assign Swimmer to Coach</h2>
-              <button
-                onClick={closeAssignModal}
-                aria-label="Close dialog"
-                className="text-gray-400 hover:text-gray-600 text-xl"
-              >
-                &times;
-              </button>
-            </div>
-
-            <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
-              {loadingAssignData ? (
-                <p className="text-center text-sm text-gray-500 py-4">Loading...</p>
-              ) : (
-                <>
-                  {/* Step 1: Select Swimmer */}
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">
-                      Select Swimmer
-                    </label>
-                    <select
-                      className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-700 focus:border-teal-400 focus:outline-none"
-                      value={selectedSwimmer?.id ?? ""}
-                      onChange={(e) => {
-                        const swimmer = allSwimmers.find((s) => s.id === e.target.value);
-                        if (swimmer) handleSelectSwimmer(swimmer);
-                      }}
-                    >
-                      <option value="">-- Select a swimmer --</option>
-                      {allSwimmers.map((s) => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Step 2: Show coaches once swimmer is selected */}
-                  {selectedSwimmer && (
                     <div>
-                      <p className="mb-2 text-sm font-medium text-gray-700">
-                        Coaches for {selectedSwimmer.name}
+                      <p className="text-sm font-medium text-gray-800">{request.swimmer_name}</p>
+                      <p className="text-xs text-gray-500">
+                        Applied {new Date(request.created_at).toLocaleDateString("en-US", {
+                          month: "short", day: "numeric", year: "numeric",
+                        })}
                       </p>
-                      {allCoaches.length === 0 ? (
-                        <p className="text-sm text-gray-500">No coaches available.</p>
-                      ) : (
-                        <div className="space-y-2">
-                          {allCoaches.map((coach) => (
-                            <div
-                              key={coach.id}
-                              className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2.5"
-                            >
-                              <div className="flex items-center gap-2">
-                                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-100 text-xs font-medium text-teal-700">
-                                  {coach.name.split(" ").map((n) => n[0]).join("")}
-                                </div>
-                                <span className="text-sm text-gray-700">{coach.name}</span>
-                              </div>
-                              {coach.isAssigned ? (
-                                <button
-                                  onClick={() => handleUnassign(coach.id)}
-                                  disabled={assignLoading}
-                                  className="rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-100 transition disabled:opacity-60"
-                                >
-                                  Unassign
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={() => handleAssign(coach.id)}
-                                  disabled={assignLoading}
-                                  className="rounded-full bg-teal-50 px-3 py-1 text-xs font-medium text-teal-600 hover:bg-teal-100 transition disabled:opacity-60"
-                                >
-                                  Assign
-                                </button>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
                     </div>
-                  )}
-
-                  {/* Feedback */}
-                  {assignError && (
-                    <p className="text-sm text-red-500">{assignError}</p>
-                  )}
-                  {assignSuccess && (
-                    <p className="text-sm text-teal-600">{assignSuccess}</p>
-                  )}
-                </>
-              )}
-            </div>
-
-            <div className="border-t border-gray-100 p-4">
-              <button
-                onClick={() => {
-                  setShowAssignModal(false);
-                  fetchDashboard();
-                }}
-                className="w-full rounded-full bg-teal-500 py-2.5 text-sm font-medium text-white hover:bg-teal-600 transition"
-              >
-                Done
-              </button>
+                  </div>
+                  <button
+                    onClick={() => { setSelectedRequest(request); setShowRequestModal(true); }}
+                    className="rounded-full border border-teal-300 px-3 py-1 text-xs text-teal-600 hover:bg-teal-50 transition"
+                  >
+                    Review
+                  </button>
+                </div>
+              ))}
             </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* Assign Modal */}
+        {showAssignModal && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4"
+            onClick={(e) => { if (e.target === e.currentTarget) closeAssignModal(); }}
+          >
+            <div
+              ref={modalRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="assign-modal-title"
+              tabIndex={-1}
+              className="w-full max-w-md rounded-xl bg-white shadow-xl focus:outline-none"
+            >
+              <div className="flex items-center justify-between border-b border-gray-100 p-4">
+                <h2 id="assign-modal-title" className="font-semibold text-gray-800">Assign Swimmer to Coach</h2>
+                <button onClick={closeAssignModal} aria-label="Close dialog" className="text-gray-400 hover:text-gray-600 text-xl">
+                  &times;
+                </button>
+              </div>
+
+              <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
+                {loadingAssignData ? (
+                  <p className="text-center text-sm text-gray-500 py-4">Loading...</p>
+                ) : (
+                  <>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Select Swimmer</label>
+                      <select
+                        className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-700 focus:border-teal-400 focus:outline-none"
+                        value={selectedSwimmer?.id ?? ""}
+                        onChange={(e) => {
+                          const swimmer = allSwimmers.find((s) => s.id === e.target.value);
+                          if (swimmer) handleSelectSwimmer(swimmer);
+                        }}
+                      >
+                        <option value="">-- Select a swimmer --</option>
+                        {allSwimmers.map((s) => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {selectedSwimmer && (
+                      <div>
+                        <p className="mb-2 text-sm font-medium text-gray-700">
+                          Coaches for {selectedSwimmer.name}
+                        </p>
+                        {allCoaches.length === 0 ? (
+                          <p className="text-sm text-gray-500">No coaches available.</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {allCoaches.map((coach) => (
+                              <div key={coach.id} className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2.5">
+                                <div className="flex items-center gap-2">
+                                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-100 text-xs font-medium text-teal-700">
+                                    {coach.name.split(" ").map((n) => n[0]).join("")}
+                                  </div>
+                                  <span className="text-sm text-gray-700">{coach.name}</span>
+                                </div>
+                                {coach.isAssigned ? (
+                                  <button
+                                    onClick={() => handleUnassign(coach.id)}
+                                    disabled={assignLoading}
+                                    className="rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-100 transition disabled:opacity-60"
+                                  >
+                                    Unassign
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() => handleAssign(coach.id)}
+                                    disabled={assignLoading}
+                                    className="rounded-full bg-teal-50 px-3 py-1 text-xs font-medium text-teal-600 hover:bg-teal-100 transition disabled:opacity-60"
+                                  >
+                                    Assign
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {assignError && <p className="text-sm text-red-500">{assignError}</p>}
+                    {assignSuccess && <p className="text-sm text-teal-600">{assignSuccess}</p>}
+                  </>
+                )}
+              </div>
+
+              <div className="border-t border-gray-100 p-4">
+                <button
+                  onClick={() => { setShowAssignModal(false); fetchDashboard(); }}
+                  className="w-full rounded-full bg-teal-500 py-2.5 text-sm font-medium text-white hover:bg-teal-600 transition"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Request Review Modal */}
+        {showRequestModal && selectedRequest && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4">
+            <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+              <div className="flex items-center justify-between border-b border-gray-100 p-4">
+                <h2 className="font-semibold text-gray-800">
+                  Coach Application — {selectedRequest.swimmer_name}
+                </h2>
+                <button
+                  onClick={() => { setShowRequestModal(false); setSelectedRequest(null); }}
+                  className="text-gray-400 hover:text-gray-600 text-xl"
+                >
+                  &times;
+                </button>
+              </div>
+
+              <div className="p-4 space-y-4 max-h-[60vh] overflow-y-auto">
+                <div>
+                  <p className="mb-1 text-xs font-medium text-gray-500">Qualifications</p>
+                  <p className="text-sm text-gray-700">{selectedRequest.qualifications ?? "—"}</p>
+                </div>
+                <div>
+                  <p className="mb-1 text-xs font-medium text-gray-500">Experience</p>
+                  <p className="text-sm text-gray-700">{selectedRequest.experience ?? "—"}</p>
+                </div>
+                <div>
+                  <p className="mb-1 text-xs font-medium text-gray-500">Certifications</p>
+                  <p className="text-sm text-gray-700">{selectedRequest.certifications ?? "—"}</p>
+                </div>
+                {selectedRequest.message && (
+                  <div>
+                    <p className="mb-1 text-xs font-medium text-gray-500">Additional Message</p>
+                    <p className="text-sm text-gray-700">{selectedRequest.message}</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t border-gray-100 p-4 flex gap-3">
+                <button
+                  onClick={async () => {
+                    const supabase = createClient();
+                    await supabase
+                      .from("coach_requests")
+                      .update({ status: "rejected", reviewed_at: new Date().toISOString() })
+                      .eq("id", selectedRequest.id);
+                    setShowRequestModal(false);
+                    setSelectedRequest(null);
+                    await fetchDashboard();
+                  }}
+                  className="flex-1 rounded-full border border-red-200 py-2.5 text-sm font-medium text-red-500 hover:bg-red-50 transition"
+                >
+                  Reject
+                </button>
+                <button
+                  onClick={() => handlePromoteToCoach(selectedRequest)}
+                  disabled={promotingId === selectedRequest.id}
+                  className="flex-1 rounded-full bg-teal-500 py-2.5 text-sm font-medium text-white hover:bg-teal-600 transition disabled:opacity-60"
+                >
+                  {promotingId === selectedRequest.id ? "Promoting..." : "Approve & Promote"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );

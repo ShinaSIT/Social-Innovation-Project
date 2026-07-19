@@ -33,9 +33,9 @@ const CONDITION_OPTIONS = [
 // Sanitize text input - strip HTML tags and limit length
 function sanitize(value: string, maxLength = 500): string {
   return value
-    .replace(/<[^>]*>/g, "")           // strip HTML tags
-    .replace(/[<>"'`]/g, "")           // strip dangerous characters
-    .slice(0, maxLength)
+    .replace(/<[^>]*>/g, "")
+    .replace(/[<>"'`]/g, "")
+    .slice(0, maxLength);
 }
 
 function sanitizeNumber(value: string): string {
@@ -47,29 +47,24 @@ function validateForm(form: FormData): string | null {
   if (form.age && (isNaN(age) || age < 1 || age > 120)) {
     return "Please enter a valid age between 1 and 120.";
   }
-
   const noise = parseInt(form.noise_sensitivity);
   if (form.noise_sensitivity && (isNaN(noise) || noise < 0 || noise > 10)) {
     return "Noise sensitivity must be between 0 and 10.";
   }
-
   const touch = parseInt(form.touch_tolerance);
   if (form.touch_tolerance && (isNaN(touch) || touch < 0 || touch > 10)) {
     return "Touch tolerance must be between 0 and 10.";
   }
-
   const transition = parseInt(form.transition_difficulty);
   if (form.transition_difficulty && (isNaN(transition) || transition < 0 || transition > 10)) {
     return "Transition difficulty must be between 0 and 10.";
   }
-
   if (form.sensory_needs.length > 500) return "Sensory needs must be under 500 characters.";
   if (form.sensory_details.length > 500) return "Sensory details must be under 500 characters.";
   if (form.interests.length > 500) return "Interests must be under 500 characters.";
   if (form.communication_preference.length > 200) return "Communication preference must be under 200 characters.";
   if (form.known_triggers.length > 500) return "Known triggers must be under 500 characters.";
   if (form.additional_notes.length > 500) return "Additional notes must be under 500 characters.";
-
   return null;
 }
 
@@ -95,6 +90,27 @@ export default function EditSwimmerProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  // Coach request state — must be inside component
+  const [coachRequest, setCoachRequest] = useState<{
+    id: string;
+    status: string;
+    message: string | null;
+    qualifications: string | null;
+    experience: string | null;
+    certifications: string | null;
+  } | null>(null);
+  const [requestForm, setRequestForm] = useState({
+    message: "",
+    qualifications: "",
+    experience: "",
+    certifications: "",
+  });
+  const [requestSaving, setRequestSaving] = useState(false);
+  const [requestError, setRequestError] = useState<string | null>(null);
+  const [requestSuccess, setRequestSuccess] = useState<string | null>(null);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+
   const router = useRouter();
 
   useEffect(() => {
@@ -110,7 +126,6 @@ export default function EditSwimmerProfilePage() {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) throw new Error("Not authenticated.");
 
-      // Determine swimmer ID (caregiver or swimmer)
       let targetSwimmerId = user.id;
 
       const { data: caregiverLinks } = await supabase
@@ -125,7 +140,23 @@ export default function EditSwimmerProfilePage() {
 
       setSwimmerId(targetSwimmerId);
 
-      // Fetch swimmer name
+      // Fetch existing coach request
+      const { data: requestData } = await supabase
+        .from("coach_requests")
+        .select("id, status, message, qualifications, experience, certifications")
+        .eq("swimmer_id", targetSwimmerId)
+        .single();
+
+      if (requestData) {
+        setCoachRequest(requestData);
+        setRequestForm({
+          message: requestData.message ?? "",
+          qualifications: requestData.qualifications ?? "",
+          experience: requestData.experience ?? "",
+          certifications: requestData.certifications ?? "",
+        });
+      }
+
       const { data: profileData } = await supabase
         .from("profiles")
         .select("full_name")
@@ -134,14 +165,12 @@ export default function EditSwimmerProfilePage() {
 
       setSwimmerName(profileData?.full_name ?? "Swimmer");
 
-      // Fetch swimmers table data
       const { data: swimmerData } = await supabase
         .from("swimmers")
         .select("age")
         .eq("id", targetSwimmerId)
         .single();
 
-      // Fetch swimmer_profiles table data
       const { data: swimmerProfile } = await supabase
         .from("swimmer_profiles")
         .select("conditions, sensory_needs, sensory_details, interests, noise_sensitivity, touch_tolerance, transition_difficulty, communication_preference, known_triggers, additional_notes, consent_given")
@@ -179,11 +208,7 @@ export default function EditSwimmerProfilePage() {
     }));
   };
 
-  const handleChange = (
-    field: keyof FormData,
-    value: string,
-    maxLength = 500
-  ) => {
+  const handleChange = (field: keyof FormData, value: string, maxLength = 500) => {
     setForm((prev) => ({
       ...prev,
       [field]: sanitize(value, maxLength),
@@ -194,7 +219,6 @@ export default function EditSwimmerProfilePage() {
     e.preventDefault();
     if (!swimmerId) return;
 
-    // Validate
     const validationError = validateForm(form);
     if (validationError) {
       setSaveError(validationError);
@@ -208,25 +232,18 @@ export default function EditSwimmerProfilePage() {
     const supabase = createClient();
 
     try {
-      // Update swimmers table
       if (form.age) {
         const { error: swimmerError } = await supabase
           .from("swimmers")
           .update({ age: parseInt(form.age) })
           .eq("id", swimmerId);
-
         if (swimmerError) throw new Error("Failed to update age.");
       }
 
-      // Parse known_triggers from comma-separated string to array
       const triggersArray = form.known_triggers
-        ? form.known_triggers
-            .split(",")
-            .map((t) => sanitize(t.trim(), 100))
-            .filter((t) => t.length > 0)
+        ? form.known_triggers.split(",").map((t) => sanitize(t.trim(), 100)).filter((t) => t.length > 0)
         : [];
 
-      // Upsert swimmer_profiles table
       const { error: profileError } = await supabase
         .from("swimmer_profiles")
         .upsert({
@@ -249,11 +266,83 @@ export default function EditSwimmerProfilePage() {
 
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
-
     } catch (err: any) {
       setSaveError(err.message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleRequestSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRequestError(null);
+    setRequestSuccess(null);
+
+    if (!requestForm.qualifications.trim()) { setRequestError("Please enter your qualifications."); return; }
+    if (!requestForm.experience.trim()) { setRequestError("Please enter your experience."); return; }
+    if (!requestForm.certifications.trim()) { setRequestError("Please enter your certifications."); return; }
+
+    setRequestSaving(true);
+    const supabase = createClient();
+
+    try {
+      if (coachRequest) {
+        const { error } = await supabase
+          .from("coach_requests")
+          .update({
+            message: requestForm.message || null,
+            qualifications: requestForm.qualifications.trim(),
+            experience: requestForm.experience.trim(),
+            certifications: requestForm.certifications.trim(),
+            status: "pending",
+          })
+          .eq("id", coachRequest.id);
+        if (error) throw new Error("Failed to update request.");
+      } else {
+        const { error } = await supabase
+          .from("coach_requests")
+          .insert({
+            swimmer_id: swimmerId,
+            message: requestForm.message || null,
+            qualifications: requestForm.qualifications.trim(),
+            experience: requestForm.experience.trim(),
+            certifications: requestForm.certifications.trim(),
+            status: "pending",
+          });
+        if (error) throw new Error("Failed to submit request.");
+      }
+
+      setRequestSuccess("Your coach application has been submitted successfully.");
+      await fetchProfile();
+    } catch (err: any) {
+      setRequestError(err.message);
+    } finally {
+      setRequestSaving(false);
+    }
+  };
+
+  const handleCancelRequest = async () => {
+    if (!coachRequest) return;
+    setRequestSaving(true);
+    setRequestError(null);
+
+    const supabase = createClient();
+
+    try {
+      const { error } = await supabase
+        .from("coach_requests")
+        .delete()
+        .eq("id", coachRequest.id);
+      if (error) throw new Error("Failed to cancel request.");
+
+      setCoachRequest(null);
+      setRequestForm({ message: "", qualifications: "", experience: "", certifications: "" });
+      setShowCancelConfirm(false);
+      setRequestSuccess("Your coach application has been cancelled.");
+    } catch (err: any) {
+      setRequestError(err.message);
+    } finally {
+      setRequestSaving(false);
     }
   };
 
@@ -276,7 +365,6 @@ export default function EditSwimmerProfilePage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <SwimmerHeader />
-      {/* Header */}
       <div id="main-content" tabIndex={-1} className="bg-gradient-to-b from-teal-50 to-gray-50 px-6 pt-6 pb-8 text-center">
         <div className="mx-auto mb-2 flex h-16 w-16 items-center justify-center rounded-full bg-teal-100 text-2xl font-bold text-teal-700">
           {swimmerName[0]}
@@ -289,7 +377,7 @@ export default function EditSwimmerProfilePage() {
 
         {/* Basic Information */}
         <div className="rounded-xl bg-white p-4 shadow-sm">
-          <h2 className="mb-3 font-semibold text-gray-800">&#128100; Basic Information</h2>
+          <h2 className="mb-3 font-semibold text-gray-800"> Basic Information</h2>
           <label className="mb-1 block text-sm text-gray-600">Age</label>
           <input
             type="number"
@@ -303,7 +391,7 @@ export default function EditSwimmerProfilePage() {
 
         {/* Swimmer Conditions */}
         <div className="rounded-xl bg-white p-4 shadow-sm">
-          <h2 className="mb-1 font-semibold text-gray-800">&#128336; Swimmer Conditions</h2>
+          <h2 className="mb-1 font-semibold text-gray-800"> Swimmer Conditions</h2>
           <p className="mb-3 text-xs text-gray-500">Select all that apply. This helps our coaches provide the best support.</p>
           <div className="space-y-2">
             {CONDITION_OPTIONS.map((c) => (
@@ -322,8 +410,7 @@ export default function EditSwimmerProfilePage() {
 
         {/* Sensory Needs */}
         <div className="rounded-xl bg-white p-4 shadow-sm space-y-4">
-          <h2 className="font-semibold text-gray-800">&#127800; Sensory Needs & Issues</h2>
-
+          <h2 className="font-semibold text-gray-800"> Sensory Needs & Issues</h2>
           <div>
             <label className="mb-1 block text-xs text-gray-500">Describe any sensory sensitivities or preferences</label>
             <textarea
@@ -335,7 +422,6 @@ export default function EditSwimmerProfilePage() {
             />
             <p className="mt-0.5 text-right text-xs text-gray-400">{form.sensory_needs.length}/500</p>
           </div>
-
           <div>
             <label className="mb-1 block text-xs text-gray-500">Additional sensory details</label>
             <textarea
@@ -346,11 +432,8 @@ export default function EditSwimmerProfilePage() {
             />
             <p className="mt-0.5 text-right text-xs text-gray-400">{form.sensory_details.length}/500</p>
           </div>
-
           <div>
-            <label className="mb-1 block text-xs text-gray-500">
-              Noise Sensitivity (0–10)
-            </label>
+            <label className="mb-1 block text-xs text-gray-500">Noise Sensitivity (0–10)</label>
             <input
               type="number"
               value={form.noise_sensitivity}
@@ -360,11 +443,8 @@ export default function EditSwimmerProfilePage() {
               className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-700 focus:border-teal-400 focus:outline-none"
             />
           </div>
-
           <div>
-            <label className="mb-1 block text-xs text-gray-500">
-              Touch Tolerance (0–10)
-            </label>
+            <label className="mb-1 block text-xs text-gray-500">Touch Tolerance (0–10)</label>
             <input
               type="number"
               value={form.touch_tolerance}
@@ -374,11 +454,8 @@ export default function EditSwimmerProfilePage() {
               className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-700 focus:border-teal-400 focus:outline-none"
             />
           </div>
-
           <div>
-            <label className="mb-1 block text-xs text-gray-500">
-              Transition Difficulty (0–10)
-            </label>
+            <label className="mb-1 block text-xs text-gray-500">Transition Difficulty (0–10)</label>
             <input
               type="number"
               value={form.transition_difficulty}
@@ -392,8 +469,7 @@ export default function EditSwimmerProfilePage() {
 
         {/* Communication & Triggers */}
         <div className="rounded-xl bg-white p-4 shadow-sm space-y-4">
-          <h2 className="font-semibold text-gray-800">&#128172; Communication & Triggers</h2>
-
+          <h2 className="font-semibold text-gray-800"> Communication & Triggers</h2>
           <div>
             <label className="mb-1 block text-xs text-gray-500">Communication Preference</label>
             <input
@@ -405,7 +481,6 @@ export default function EditSwimmerProfilePage() {
             />
             <p className="mt-0.5 text-right text-xs text-gray-400">{form.communication_preference.length}/200</p>
           </div>
-
           <div>
             <label className="mb-1 block text-xs text-gray-500">Known Triggers (comma-separated)</label>
             <textarea
@@ -421,7 +496,7 @@ export default function EditSwimmerProfilePage() {
 
         {/* Interests */}
         <div className="rounded-xl bg-white p-4 shadow-sm">
-          <h2 className="mb-1 font-semibold text-gray-800">&#127775; Interests & Motivations</h2>
+          <h2 className="mb-1 font-semibold text-gray-800"> Interests & Motivations</h2>
           <label className="mb-1 block text-xs text-gray-500">What does your swimmer enjoy?</label>
           <textarea
             value={form.interests}
@@ -436,7 +511,7 @@ export default function EditSwimmerProfilePage() {
 
         {/* Additional Notes */}
         <div className="rounded-xl bg-white p-4 shadow-sm">
-          <h2 className="mb-1 font-semibold text-gray-800">&#128221; Additional Notes</h2>
+          <h2 className="mb-1 font-semibold text-gray-800"> Additional Notes</h2>
           <textarea
             value={form.additional_notes}
             onChange={(e) => handleChange("additional_notes", e.target.value)}
@@ -446,6 +521,142 @@ export default function EditSwimmerProfilePage() {
           />
           <p className="mt-0.5 text-right text-xs text-gray-400">{form.additional_notes.length}/500</p>
         </div>
+
+        {/* Coach Application Section */}
+        <div className="rounded-xl bg-white p-4 shadow-sm">
+          <h2 className="mb-1 font-semibold text-gray-800"> Are you a Coach?</h2>
+          <p className="mb-4 text-xs text-gray-500">
+            Fill in your details below and submit an application to your club admin.
+          </p>
+
+          {coachRequest && (
+            <div className={`mb-4 rounded-lg px-4 py-3 text-sm ${
+              coachRequest.status === "pending" ? "bg-amber-50 text-amber-700" :
+              coachRequest.status === "approved" ? "bg-teal-50 text-teal-700" :
+              "bg-red-50 text-red-600"
+            }`}>
+              {coachRequest.status === "pending" && "Your application is pending review by the admin."}
+              {coachRequest.status === "approved" && "Your application has been approved!"}
+              {coachRequest.status === "rejected" && "Your application was not approved. You may update and resubmit."}
+            </div>
+          )}
+
+          <div className="space-y-4">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">
+                Qualifications <span className="text-red-400">*</span>
+              </label>
+              <textarea
+                value={requestForm.qualifications}
+                onChange={(e) => setRequestForm((prev) => ({ ...prev, qualifications: sanitize(e.target.value, 500) }))}
+                placeholder="e.g. Bachelor of Sports Science, Swimming Level 2 Instructor..."
+                rows={3}
+                disabled={coachRequest?.status === "pending"}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:border-teal-400 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
+              />
+              <p className="mt-0.5 text-right text-xs text-gray-400">{requestForm.qualifications.length}/500</p>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">
+                Experience <span className="text-red-400">*</span>
+              </label>
+              <textarea
+                value={requestForm.experience}
+                onChange={(e) => setRequestForm((prev) => ({ ...prev, experience: sanitize(e.target.value, 500) }))}
+                placeholder="e.g. 3 years coaching children with special needs at a community pool..."
+                rows={3}
+                disabled={coachRequest?.status === "pending"}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:border-teal-400 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
+              />
+              <p className="mt-0.5 text-right text-xs text-gray-400">{requestForm.experience.length}/500</p>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">
+                Certifications <span className="text-red-400">*</span>
+              </label>
+              <textarea
+                value={requestForm.certifications}
+                onChange={(e) => setRequestForm((prev) => ({ ...prev, certifications: sanitize(e.target.value, 500) }))}
+                placeholder="e.g. Singapore Swimming Association Level 1, First Aid Certified..."
+                rows={3}
+                disabled={coachRequest?.status === "pending"}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:border-teal-400 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
+              />
+              <p className="mt-0.5 text-right text-xs text-gray-400">{requestForm.certifications.length}/500</p>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">
+                Additional Message <span className="text-gray-400 font-normal">(optional)</span>
+              </label>
+              <textarea
+                value={requestForm.message}
+                onChange={(e) => setRequestForm((prev) => ({ ...prev, message: sanitize(e.target.value, 500) }))}
+                placeholder="Anything else you'd like the admin to know..."
+                rows={2}
+                disabled={coachRequest?.status === "pending"}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:border-teal-400 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
+              />
+            </div>
+
+            {requestError && <p className="text-sm text-red-500">{requestError}</p>}
+            {requestSuccess && <p className="text-sm text-teal-600">{requestSuccess}</p>}
+
+            <div className="flex gap-3">
+              {coachRequest && (
+                <button
+                  type="button"
+                  onClick={() => setShowCancelConfirm(true)}
+                  disabled={requestSaving}
+                  className="rounded-lg border border-red-200 px-4 py-2.5 text-sm font-medium text-red-500 hover:bg-red-50 transition disabled:opacity-60"
+                >
+                  Cancel Application
+                </button>
+              )}
+              {coachRequest?.status !== "pending" && (
+                <button
+                  type="button"
+                  onClick={handleRequestSubmit}
+                  disabled={requestSaving}
+                  className="flex-1 rounded-lg bg-teal-500 py-2.5 text-sm font-medium text-white hover:bg-teal-600 transition disabled:opacity-60"
+                >
+                  {requestSaving ? "Submitting..." : coachRequest ? "Resubmit Application" : "Submit Application"}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Cancel Confirm Modal */}
+        {showCancelConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4">
+            <div className="w-full max-w-sm rounded-xl bg-white shadow-xl p-6">
+              <h2 className="mb-2 font-semibold text-gray-800">Cancel Application</h2>
+              <p className="mb-6 text-sm text-gray-500">
+                Are you sure you want to cancel your coach application? You can reapply at any time.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowCancelConfirm(false)}
+                  className="flex-1 rounded-full border border-gray-200 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50"
+                >
+                  Keep Application
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCancelRequest}
+                  disabled={requestSaving}
+                  className="flex-1 rounded-full bg-red-500 py-2.5 text-sm font-medium text-white hover:bg-red-600 transition disabled:opacity-60"
+                >
+                  {requestSaving ? "Cancelling..." : "Yes, Cancel"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Consent */}
         <label className="flex items-start gap-2 cursor-pointer">
@@ -460,7 +671,6 @@ export default function EditSwimmerProfilePage() {
           </span>
         </label>
 
-        {/* Errors & Success */}
         {saveError && (
           <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">
             {saveError}
@@ -489,7 +699,6 @@ export default function EditSwimmerProfilePage() {
           </button>
         </div>
 
-        {/* Logout */}
         <button
           type="button"
           onClick={async () => {
