@@ -8,14 +8,22 @@ import Pagination from "@/app/components/Pagination";
 
 const PAGE_SIZE = 10;
 
+type CoachType = "club" | "independent";
+
 interface Student {
   id: string;
-  name: string;
+  full_name: string;
   age: number | null;
   level: number | null;
   category: string | null;
-  lastSession: string | null;
+  last_session: string | null;
   progress: number | null;
+}
+
+interface CoachMeta {
+  coach_type: CoachType;
+  cert_status: "pending" | "verified" | "rejected";
+  club_id: string | null;
 }
 
 interface PendingUpdate {
@@ -29,6 +37,7 @@ export default function MyStudentsPage() {
   const [page, setPage] = useState(1);
   const [students, setStudents] = useState<Student[]>([]);
   const [pendingUpdates, setPendingUpdates] = useState<PendingUpdate[]>([]);
+  const [coachMeta, setCoachMeta] = useState<CoachMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<"name" | "age" | "level" | "progress">("name");
@@ -47,21 +56,52 @@ export default function MyStudentsPage() {
         const { data: { user }, error: userError } = await supabase.auth.getUser();
         if (userError || !user) throw new Error("Not authenticated.");
 
-        // 2. Get swimmer IDs assigned to this coach
-        const { data: assignments, error: assignError } = await supabase
-          .from("coach_students")
-          .select("swimmer_id")
-          .eq("coach_id", user.id);
+        // 2. Get coach metadata (coach_type / cert_status) and their profile club_id
+        const [{ data: coachData }, { data: profileData }] = await Promise.all([
+          supabase.from("coaches").select("coach_type, cert_status, club_id").eq("id", user.id).single(),
+          supabase.from("profiles").select("club_id").eq("id", user.id).single(),
+        ]);
 
-        if (assignError) throw new Error("Failed to load student assignments.");
-        if (!assignments || assignments.length === 0) {
+        if (coachData) setCoachMeta(coachData as CoachMeta);
+
+        // Independent coaches without verified certification can't view students yet
+        if (coachData?.coach_type === "independent" && coachData?.cert_status !== "verified") {
           setStudents([]);
           setPendingUpdates([]);
           setLoading(false);
           return;
         }
 
-        const swimmerIds = assignments.map((a) => a.swimmer_id);
+        const clubId = coachData?.club_id ?? profileData?.club_id ?? null;
+
+        let swimmerIds: string[] = [];
+
+        if (coachData?.coach_type === "club" && clubId) {
+          // Club coach — all swimmers in the club
+          const { data: clubSwimmers, error: clubError } = await supabase
+            .from("swimmers")
+            .select("id")
+            .eq("club_id", clubId);
+
+          if (clubError) throw new Error("Failed to load club swimmers.");
+          swimmerIds = (clubSwimmers ?? []).map((s) => s.id);
+        } else {
+          // Independent coach (or no club) — only explicitly assigned swimmers
+          const { data: assignments, error: assignError } = await supabase
+            .from("coach_students")
+            .select("swimmer_id")
+            .eq("coach_id", user.id);
+
+          if (assignError) throw new Error("Failed to load student assignments.");
+          swimmerIds = (assignments ?? []).map((a) => a.swimmer_id);
+        }
+
+        if (swimmerIds.length === 0) {
+          setStudents([]);
+          setPendingUpdates([]);
+          setLoading(false);
+          return;
+        }
 
         // 3. Fetch profiles and swimmer data for all assigned swimmers
         const { data: profiles, error: profilesError } = await supabase
@@ -81,11 +121,11 @@ export default function MyStudentsPage() {
           const swimmer = swimmerData?.find((s) => s.id === profile.id);
           return {
             id: profile.id,
-            name: profile.full_name ?? "Unknown",
+            full_name: profile.full_name ?? "Unknown",
             age: swimmer?.age ?? null,
             level: swimmer?.level ?? null,
             category: swimmer?.category ?? null,
-            lastSession: swimmer?.last_session ?? null,
+            last_session: swimmer?.last_session ?? null,
             progress: swimmer?.progress ?? null,
           };
         });
@@ -124,7 +164,6 @@ export default function MyStudentsPage() {
         const unreflectedMap: Record<string, { sessionDate: string }> = {};
         for (const session of sessions) {
           if (!reflectedSessionIds.has(session.id)) {
-            // Keep the most recent session per swimmer
             if (
               !unreflectedMap[session.swimmer_id] ||
               session.session_date > unreflectedMap[session.swimmer_id].sessionDate
@@ -139,7 +178,7 @@ export default function MyStudentsPage() {
           const student = merged.find((s) => s.id === swimmerId);
           return {
             id: swimmerId,
-            name: student?.name ?? "Unknown",
+            name: student?.full_name ?? "Unknown",
             sessionDate,
           };
         });
@@ -160,7 +199,7 @@ export default function MyStudentsPage() {
 
   const filtered = students
     .filter((s) => {
-      const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase());
+      const matchesSearch = s.full_name.toLowerCase().includes(search.toLowerCase());
       const matchesCategory = filterCategory ? s.category === filterCategory : true;
       return matchesSearch && matchesCategory;
     })
@@ -182,8 +221,8 @@ export default function MyStudentsPage() {
           valB = b.progress ?? 0;
           break;
         default:
-          valA = a.name.toLowerCase();
-          valB = b.name.toLowerCase();
+          valA = a.full_name.toLowerCase();
+          valB = b.full_name.toLowerCase();
       }
 
       if (valA < valB) return sortOrder === "asc" ? -1 : 1;
@@ -213,6 +252,39 @@ export default function MyStudentsPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <p className="text-sm text-red-500">{error}</p>
+      </div>
+    );
+  }
+
+  // ── Certification pending gate ──────────────────────────────
+  if (coachMeta?.coach_type === "independent" && coachMeta?.cert_status !== "verified") {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <CoachHeader />
+        <div id="main-content" tabIndex={-1} className="p-6">
+          <div className="mb-1 flex items-center gap-2">
+            <h1 className="text-xl font-bold text-gray-800">My Students</h1>
+          </div>
+          <div className="mt-10 rounded-xl bg-amber-50 border border-amber-200 p-6 text-center">
+            <p className="text-3xl mb-3">&#128274;</p>
+            <h2 className="font-semibold text-amber-800 mb-1">
+              {coachMeta.cert_status === "rejected"
+                ? "Certification Not Approved"
+                : "Certification Pending Review"}
+            </h2>
+            <p className="text-sm text-amber-700 mb-4">
+              {coachMeta.cert_status === "rejected"
+                ? "Your certification was not approved. Please contact support or re-submit."
+                : "Your coaching certification is being reviewed. You'll be able to add and view students once approved."}
+            </p>
+            <Link
+              href="/coach/certification"
+              className="inline-block rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600 transition"
+            >
+              {coachMeta.cert_status === "rejected" ? "Re-submit Certification" : "View Submission"}
+            </Link>
+          </div>
+        </div>
       </div>
     );
   }
@@ -250,6 +322,14 @@ export default function MyStudentsPage() {
           >
             &#9881; Filter
           </button>
+          {coachMeta?.coach_type === "independent" && (
+            <Link
+              href="/coach/students/add"
+              className="rounded-lg bg-teal-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-teal-600 transition whitespace-nowrap"
+            >
+              + Add Student
+            </Link>
+          )}
         </div>
 
         {/* Filter Panel */}
@@ -360,7 +440,7 @@ export default function MyStudentsPage() {
                   </div>
                 </div>
                 <Link
-                  href={`/coach/students/${s.id}`}
+                  href={`/coach/students/${s.id}?tab=reflections`}
                   className="rounded-full border border-teal-300 px-3 py-1 text-xs text-teal-600 hover:bg-teal-50"
                 >
                   Add Reflection
@@ -386,16 +466,16 @@ export default function MyStudentsPage() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-teal-100 text-sm font-medium text-teal-700">
-                    {student.name[0]}
+                    {student.full_name[0]}
                   </div>
                   <div>
-                    <p className="font-medium text-gray-800">{student.name}</p>
+                    <p className="font-medium text-gray-800">{student.full_name}</p>
                     <p className="text-xs text-gray-500">
                       {student.age ? `Age ${student.age}` : ""}
                       {student.level ? ` • Level ${student.level}` : ""}
                       {student.category ? ` • ${student.category}` : ""}
                     </p>
-                    <p className="text-xs text-gray-400">Last session: {formatDate(student.lastSession)}</p>
+                    <p className="text-xs text-gray-400">Last session: {formatDate(student.last_session)}</p>
                   </div>
                 </div>
                 <span className="text-xs text-gray-400">&rsaquo;</span>

@@ -6,6 +6,7 @@ import { createClient } from "@/utils/supabase/client";
 import AdminHeader from "@/app/admin/components/AdminHeader";
 import Pagination from "@/app/components/Pagination";
 import { useFocusTrap } from "@/app/hooks/useFocusTrap";
+import LogoutButton from "@/components/LogoutButton";
 
 const AT_RISK_PAGE_SIZE = 5;
 
@@ -491,6 +492,7 @@ export default function AdminDashboardPage() {
           >
             <span aria-hidden="true">&#128202;</span> Generate Reports
           </Link>
+          <LogoutButton />
         </div>
       </div>
 
