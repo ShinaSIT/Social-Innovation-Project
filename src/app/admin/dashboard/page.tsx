@@ -366,7 +366,7 @@ export default function AdminDashboardPage() {
 
       const { error: coachError } = await supabase
         .from("coaches")
-        .upsert({ id: request.swimmer_id, club_id: clubId ?? null });
+        .upsert({ id: request.swimmer_id, club_id: clubId ?? null, coach_type: "club", cert_status: "verified", });
 
       if (coachError) throw new Error("Failed to create coach record.");
 
