@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 
 type Tab = "progress" | "reflections" | "sensory" | "milestones" | "personal";
+type SkillStatus = "not_started" | "emerging" | "mastered";
 
 interface Student {
   id: string;
@@ -19,7 +20,7 @@ interface SkillProgress {
   id: string;
   category: string;
   skill_name: string;
-  status: "not_started" | "emerging" | "mastered";
+  status: SkillStatus;
 }
 
 interface Reflection {
@@ -62,6 +63,29 @@ interface PersonalDetails {
   additional_medical_notes: string | null;
 }
 
+interface TierUpgrade {
+  currentTier: string;
+  currentStage: number;
+  nextTier: string;
+  nextStage: number;
+  newSkills: { category: string; skill_name: string }[];
+}
+
+// Tier progression map
+const TIER_PROGRESSION: Record<string, { tier: string; stage: number } | null> = {
+  "Total Beginner-1": { tier: "Total Beginner", stage: 2 },
+  "Total Beginner-2": { tier: "Beginner", stage: 1 },
+  "Beginner-1": { tier: "Beginner", stage: 2 },
+  "Beginner-2": { tier: "Beginner", stage: 3 },
+  "Beginner-3": { tier: "Intermediate", stage: 1 },
+  "Intermediate-1": { tier: "Intermediate", stage: 2 },
+  "Intermediate-2": { tier: "Intermediate", stage: 3 },
+  "Intermediate-3": { tier: "Advance", stage: 1 },
+  "Advance-1": { tier: "Advance", stage: 2 },
+  "Advance-2": { tier: "Advance", stage: 3 },
+  "Advance-3": null,
+};
+
 function groupSkillsByCategory(skills: SkillProgress[]) {
   const map: Record<string, SkillProgress[]> = {};
   for (const skill of skills) {
@@ -77,33 +101,41 @@ function groupSkillsByCategory(skills: SkillProgress[]) {
 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
+    year: "numeric", month: "long", day: "numeric",
   });
 }
 
 function formatDob(dob: string | null) {
   if (!dob) return "—";
   return new Date(dob).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
+    year: "numeric", month: "long", day: "numeric",
   });
 }
 
 function formatGender(gender: string | null) {
   if (!gender) return "—";
   const map: Record<string, string> = {
-    male: "Male",
-    female: "Female",
-    non_binary: "Non-binary",
-    prefer_not_to_say: "Prefer not to say",
+    male: "Male", female: "Female",
+    non_binary: "Non-binary", prefer_not_to_say: "Prefer not to say",
   };
   return map[gender] ?? gender;
 }
 
-function ProgressTab({ skills }: { skills: SkillProgress[] }) {
+function statusColor(status: SkillStatus) {
+  if (status === "mastered") return "bg-teal-100 text-teal-700";
+  if (status === "emerging") return "bg-amber-100 text-amber-700";
+  return "bg-gray-100 text-gray-500";
+}
+
+function ProgressTab({
+  skills,
+  onUpdateSkill,
+  updating,
+}: {
+  skills: SkillProgress[];
+  onUpdateSkill: (skillId: string, newStatus: SkillStatus) => Promise<void>;
+  updating: string | null;
+}) {
   const categories = groupSkillsByCategory(skills);
 
   if (categories.length === 0) {
@@ -121,21 +153,20 @@ function ProgressTab({ skills }: { skills: SkillProgress[] }) {
           <div className="mb-4 h-2 w-full rounded-full bg-gray-100">
             <div className="h-2 rounded-full bg-teal-400" style={{ width: `${cat.progress}%` }} />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-3">
             {cat.skills.map((skill) => (
-              <div key={skill.id} className="flex items-center justify-between">
-                <span className="text-sm text-gray-700">{skill.skill_name}</span>
-                <span
-                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${
-                    skill.status === "mastered"
-                      ? "bg-teal-100 text-teal-700"
-                      : skill.status === "emerging"
-                      ? "bg-amber-100 text-amber-700"
-                      : "bg-gray-100 text-gray-500"
-                  }`}
+              <div key={skill.id} className="flex items-center justify-between gap-3">
+                <span className="text-sm text-gray-700 flex-1">{skill.skill_name}</span>
+                <select
+                  value={skill.status}
+                  disabled={updating === skill.id}
+                  onChange={(e) => onUpdateSkill(skill.id, e.target.value as SkillStatus)}
+                  className={`rounded-full px-2.5 py-1 text-xs font-medium border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-teal-400 ${statusColor(skill.status)} ${updating === skill.id ? "opacity-50" : ""}`}
                 >
-                  {skill.status.replace("_", " ")}
-                </span>
+                  <option value="not_started">Not Started</option>
+                  <option value="emerging">Emerging</option>
+                  <option value="mastered">Mastered</option>
+                </select>
               </div>
             ))}
           </div>
@@ -193,13 +224,11 @@ function SensoryTab({ profile }: { profile: SensoryProfile | null }) {
   if (!profile) {
     return <p className="text-sm text-gray-500 text-center py-8">No sensory profile available.</p>;
   }
-
   const bars = [
     { label: "Noise Sensitivity", level: profile.noise_sensitivity },
     { label: "Touch Tolerance", level: profile.touch_tolerance },
     { label: "Transition Difficulty", level: profile.transition_difficulty },
   ];
-
   return (
     <div className="space-y-4">
       {bars.map((item) => (
@@ -209,42 +238,32 @@ function SensoryTab({ profile }: { profile: SensoryProfile | null }) {
             <span className="text-sm text-gray-600">{item.level ?? "N/A"}/10</span>
           </div>
           <div className="h-2 w-full rounded-full bg-gray-100">
-            <div
-              className="h-2 rounded-full bg-amber-400"
-              style={{ width: `${((item.level ?? 0) / 10) * 100}%` }}
-            />
+            <div className="h-2 rounded-full bg-amber-400" style={{ width: `${((item.level ?? 0) / 10) * 100}%` }} />
           </div>
         </div>
       ))}
-
       {profile.communication_preference && (
         <div className="rounded-xl bg-white p-4 shadow-sm">
           <h3 className="mb-1 font-medium text-gray-800">Communication Preference</h3>
           <p className="text-sm text-gray-600">{profile.communication_preference}</p>
         </div>
       )}
-
       {profile.known_triggers?.length > 0 && (
-        <div>
+        <div className="rounded-xl bg-white p-4 shadow-sm">
           <h3 className="mb-2 font-medium text-gray-800">Known Triggers</h3>
-          <div className="rounded-xl bg-white p-4 shadow-sm">
-            <ul className="space-y-1">
-              {profile.known_triggers.map((t) => (
-                <li key={t} className="flex items-center gap-2 text-sm text-gray-700">
-                  <span className="text-teal-500">&#10003;</span> {t}
-                </li>
-              ))}
-            </ul>
-          </div>
+          <ul className="space-y-1">
+            {profile.known_triggers.map((t) => (
+              <li key={t} className="flex items-center gap-2 text-sm text-gray-700">
+                <span className="text-teal-500">&#10003;</span> {t}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
-
       {profile.additional_notes && (
-        <div>
+        <div className="rounded-xl bg-white p-4 shadow-sm">
           <h3 className="mb-2 font-medium text-gray-800">Additional Notes</h3>
-          <div className="rounded-xl bg-white p-4 shadow-sm">
-            <p className="text-sm text-gray-600">{profile.additional_notes}</p>
-          </div>
+          <p className="text-sm text-gray-600">{profile.additional_notes}</p>
         </div>
       )}
     </div>
@@ -268,9 +287,7 @@ function MilestonesTab({ milestones }: { milestones: Milestone[] }) {
               <h3 className="font-medium text-gray-800">{m.title}</h3>
               <p className="text-xs text-gray-500">{formatDate(m.achieved_on)}</p>
               {m.description && <p className="mt-1 text-sm text-gray-600">{m.description}</p>}
-              {m.category && (
-                <span className="mt-1 inline-block text-xs text-teal-600">{m.category}</span>
-              )}
+              {m.category && <span className="mt-1 inline-block text-xs text-teal-600">{m.category}</span>}
             </div>
           ))}
         </div>
@@ -283,10 +300,8 @@ function PersonalTab({ details }: { details: PersonalDetails | null }) {
   if (!details) {
     return <p className="text-sm text-gray-500 text-center py-8">No personal details available.</p>;
   }
-
   return (
     <div className="space-y-4">
-      {/* Personal Details */}
       <div className="rounded-xl bg-white p-4 shadow-sm space-y-3">
         <h3 className="font-semibold text-gray-800">&#128100; Personal Details</h3>
         <div className="grid grid-cols-2 gap-3">
@@ -302,13 +317,10 @@ function PersonalTab({ details }: { details: PersonalDetails | null }) {
         <div>
           <p className="text-xs text-gray-500">Address</p>
           <p className="text-sm font-medium text-gray-800">
-            {details.address ?? "—"}
-            {details.postal_code ? ` S(${details.postal_code})` : ""}
+            {details.address ?? "—"}{details.postal_code ? ` S(${details.postal_code})` : ""}
           </p>
         </div>
       </div>
-
-      {/* Emergency Contact */}
       <div className="rounded-xl bg-white p-4 shadow-sm space-y-3">
         <h3 className="font-semibold text-gray-800">&#128222; Emergency Contact</h3>
         <div>
@@ -324,8 +336,6 @@ function PersonalTab({ details }: { details: PersonalDetails | null }) {
           <p className="text-sm font-medium text-gray-800">{details.emergency_contact_relationship ?? "—"}</p>
         </div>
       </div>
-
-      {/* Medical Information */}
       <div className="rounded-xl bg-white p-4 shadow-sm space-y-3">
         <h3 className="font-semibold text-gray-800">&#127973; Medical Information</h3>
         <div>
@@ -364,84 +374,225 @@ export default function StudentProfilePage() {
   const [personalDetails, setPersonalDetails] = useState<PersonalDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [updatingSkill, setUpdatingSkill] = useState<string | null>(null);
+  const [tierUpgrade, setTierUpgrade] = useState<TierUpgrade | null>(null);
+  const [applyingUpgrade, setApplyingUpgrade] = useState(false);
+
+  const fetchAll = useCallback(async () => {
+    const supabase = createClient();
+    setLoading(true);
+    setError(null);
+
+    try {
+      const { data: profileData, error: profileError } = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .eq("id", studentId)
+        .single();
+
+      const { data: swimmerData, error: swimmerError } = await supabase
+        .from("swimmers")
+        .select("age, level, category")
+        .eq("id", studentId)
+        .single();
+
+      if (profileError || swimmerError) throw new Error("Failed to load student.");
+
+      setStudent({
+        id: profileData.id,
+        full_name: profileData.full_name ?? "Unknown",
+        age: swimmerData?.age ?? null,
+        level: swimmerData?.level ?? null,
+        category: swimmerData?.category ?? null,
+      });
+
+      const { data: skillsData } = await supabase
+        .from("skill_progress")
+        .select("id, category, skill_name, status")
+        .eq("swimmer_id", studentId);
+
+      setSkills(skillsData ?? []);
+
+      const { data: reflectionsData } = await supabase
+        .from("session_reflections")
+        .select("id, coach_notes, parent_feedback, mood, created_at")
+        .eq("swimmer_id", studentId)
+        .order("created_at", { ascending: false });
+
+      setReflections(reflectionsData ?? []);
+
+      const { data: sensoryData } = await supabase
+        .from("swimmer_profiles")
+        .select("noise_sensitivity, touch_tolerance, transition_difficulty, communication_preference, known_triggers, additional_notes, sensory_needs")
+        .eq("swimmer_id", studentId)
+        .single();
+
+      setSensoryProfile(sensoryData ?? null);
+
+      const { data: milestonesData } = await supabase
+        .from("milestones")
+        .select("id, title, description, achieved_on, category")
+        .eq("swimmer_id", studentId)
+        .order("achieved_on", { ascending: false });
+
+      setMilestones(milestonesData ?? []);
+
+      const { data: personalData } = await supabase
+        .from("swimmer_personal_details")
+        .select("date_of_birth, gender, address, postal_code, emergency_contact_name, emergency_contact_number, emergency_contact_relationship, medical_conditions, allergies, medications, additional_medical_notes")
+        .eq("swimmer_id", studentId)
+        .single();
+
+      setPersonalDetails(personalData ?? null);
+
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [studentId]);
 
   useEffect(() => {
-    const fetchAll = async () => {
-      const supabase = createClient();
-      setLoading(true);
-      setError(null);
+    if (studentId) fetchAll();
+  }, [studentId, fetchAll]);
 
-      try {
-        const { data: profileData, error: profileError } = await supabase
-          .from("profiles")
-          .select("id, full_name")
-          .eq("id", studentId)
-          .single();
+  const checkTierUpgrade = async (updatedSkills: SkillProgress[], currentStudent: Student) => {
+    const supabase = createClient();
+    const allMastered = updatedSkills.every((s) => s.status === "mastered");
+    if (!allMastered) return;
 
-        const { data: swimmerData, error: swimmerError } = await supabase
-          .from("swimmers")
-          .select("age, level, category")
-          .eq("id", studentId)
-          .single();
+    const tier = currentStudent.category;
+    const stage = currentStudent.level;
+    if (!tier || !stage) return;
 
-        if (profileError || swimmerError) throw new Error("Failed to load student.");
+    const key = `${tier}-${stage}`;
+    const next = TIER_PROGRESSION[key];
+    if (!next) return;
 
-        setStudent({
-          id: profileData.id,
-          full_name: profileData.full_name ?? "Unknown",
-          age: swimmerData?.age ?? null,
-          level: swimmerData?.level ?? null,
-          category: swimmerData?.category ?? null,
+    // Fetch next tier skills from curriculum
+    const { data: nextSkills } = await supabase
+      .from("swim_curriculum")
+      .select("category, skill_name")
+      .eq("tier", next.tier)
+      .eq("stage", next.stage)
+      .order("order_index");
+
+    if (!nextSkills || nextSkills.length === 0) return;
+
+    setTierUpgrade({
+      currentTier: tier,
+      currentStage: stage,
+      nextTier: next.tier,
+      nextStage: next.stage,
+      newSkills: nextSkills,
+    });
+  };
+
+  const handleUpdateSkill = async (skillId: string, newStatus: SkillStatus) => {
+    setUpdatingSkill(skillId);
+    const supabase = createClient();
+
+    try {
+      const { error } = await supabase
+        .from("skill_progress")
+        .update({ status: newStatus, updated_at: new Date().toISOString() })
+        .eq("id", skillId);
+
+      if (error) throw new Error("Failed to update skill.");
+
+      const updatedSkills = skills.map((s) =>
+        s.id === skillId ? { ...s, status: newStatus } : s
+      );
+      setSkills(updatedSkills);
+
+      if (student) await checkTierUpgrade(updatedSkills, student);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setUpdatingSkill(null);
+    }
+  };
+
+  const handleApplyUpgrade = async () => {
+    if (!tierUpgrade || !student) return;
+    setApplyingUpgrade(true);
+    const supabase = createClient();
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      // 1. Update swimmer's tier and stage
+      const { error: swimmerError } = await supabase
+        .from("swimmers")
+        .update({
+          category: tierUpgrade.nextTier,
+          level: tierUpgrade.nextStage,
+        })
+        .eq("id", studentId);
+
+      if (swimmerError) throw new Error("Failed to update swimmer tier.");
+
+      // 2. Delete old skills
+      await supabase
+        .from("skill_progress")
+        .delete()
+        .eq("swimmer_id", studentId);
+
+      // 3. Insert new tier's skills
+      const newSkillRows = tierUpgrade.newSkills.map((s) => ({
+        swimmer_id: studentId,
+        category: s.category,
+        skill_name: s.skill_name,
+        status: "not_started" as SkillStatus,
+        updated_by: user?.id,
+      }));
+
+      const { error: insertError } = await supabase
+        .from("skill_progress")
+        .insert(newSkillRows);
+
+      if (insertError) throw new Error("Failed to insert new skills.");
+
+      // 4. Add a milestone for the tier upgrade
+      await supabase
+        .from("milestones")
+        .insert({
+          swimmer_id: studentId,
+          club_id: (await supabase.from("swimmers").select("club_id").eq("id", studentId).single()).data?.club_id,
+          recorded_by: user?.id,
+          title: `Graduated to ${tierUpgrade.nextTier} Stage ${tierUpgrade.nextStage}`,
+          description: `Successfully mastered all skills in ${tierUpgrade.currentTier} Stage ${tierUpgrade.currentStage} and advanced to the next level.`,
+          category: "Tier Progression",
+          achieved_on: new Date().toISOString().split("T")[0],
         });
 
-        const { data: skillsData } = await supabase
-          .from("skill_progress")
-          .select("id, category, skill_name, status")
-          .eq("swimmer_id", studentId);
+      // 5. Send notification to swimmer
+      const { data: swimmerProfile } = await supabase
+        .from("swimmers")
+        .select("club_id")
+        .eq("id", studentId)
+        .single();
 
-        setSkills(skillsData ?? []);
+      await supabase
+        .from("notifications")
+        .insert({
+          club_id: swimmerProfile?.club_id,
+          created_by: user?.id,
+          title: "&#127942; You've moved up a level!",
+          message: `Congratulations! You have mastered all skills in ${tierUpgrade.currentTier} Stage ${tierUpgrade.currentStage} and have been promoted to ${tierUpgrade.nextTier} Stage ${tierUpgrade.nextStage}. Keep up the great work!`,
+          type: "announcement",
+          target_user_id: studentId,
+          target_role: null,
+        });
 
-        const { data: reflectionsData } = await supabase
-          .from("session_reflections")
-          .select("id, coach_notes, parent_feedback, mood, created_at")
-          .eq("swimmer_id", studentId)
-          .order("created_at", { ascending: false });
-
-        setReflections(reflectionsData ?? []);
-
-        const { data: sensoryData } = await supabase
-          .from("swimmer_profiles")
-          .select("noise_sensitivity, touch_tolerance, transition_difficulty, communication_preference, known_triggers, additional_notes, sensory_needs")
-          .eq("swimmer_id", studentId)
-          .single();
-
-        setSensoryProfile(sensoryData ?? null);
-
-        const { data: milestonesData } = await supabase
-          .from("milestones")
-          .select("id, title, description, achieved_on, category")
-          .eq("swimmer_id", studentId)
-          .order("achieved_on", { ascending: false });
-
-        setMilestones(milestonesData ?? []);
-
-        const { data: personalData } = await supabase
-          .from("swimmer_personal_details")
-          .select("date_of_birth, gender, address, postal_code, emergency_contact_name, emergency_contact_number, emergency_contact_relationship, medical_conditions, allergies, medications, additional_medical_notes")
-          .eq("swimmer_id", studentId)
-          .single();
-
-        setPersonalDetails(personalData ?? null);
-
-      } catch (err: any) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (studentId) fetchAll();
-  }, [studentId]);
+      setTierUpgrade(null);
+      await fetchAll();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setApplyingUpgrade(false);
+    }
+  };
 
   const tabs: { key: Tab; label: string }[] = [
     { key: "progress", label: "Progress" },
@@ -469,6 +620,68 @@ export default function StudentProfilePage() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
+      {/* Tier Upgrade Modal */}
+      {tierUpgrade && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+            <div className="rounded-t-xl bg-teal-50 p-4 text-center">
+              <p className="text-3xl mb-2">&#127942;</p>
+              <h2 className="text-lg font-bold text-teal-800">Tier Upgrade Ready!</h2>
+              <p className="text-sm text-teal-600">
+                {student.full_name} has mastered all skills in {tierUpgrade.currentTier} Stage {tierUpgrade.currentStage}
+              </p>
+            </div>
+
+            <div className="p-4 space-y-4">
+              <div className="flex items-center justify-center gap-3">
+                <div className="rounded-lg bg-gray-100 px-4 py-2 text-center">
+                  <p className="text-xs text-gray-500">Current</p>
+                  <p className="text-sm font-semibold text-gray-800">{tierUpgrade.currentTier}</p>
+                  <p className="text-xs text-gray-500">Stage {tierUpgrade.currentStage}</p>
+                </div>
+                <span className="text-2xl text-teal-500">&#8594;</span>
+                <div className="rounded-lg bg-teal-100 px-4 py-2 text-center">
+                  <p className="text-xs text-teal-600">Next</p>
+                  <p className="text-sm font-semibold text-teal-800">{tierUpgrade.nextTier}</p>
+                  <p className="text-xs text-teal-600">Stage {tierUpgrade.nextStage}</p>
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-2 text-xs font-medium text-gray-500">New skills that will be added:</p>
+                <div className="max-h-40 overflow-y-auto rounded-lg bg-gray-50 p-3 space-y-1">
+                  {tierUpgrade.newSkills.map((s, i) => (
+                    <div key={i} className="flex items-center gap-2 text-xs text-gray-700">
+                      <span className="text-teal-500">&#43;</span> {s.skill_name}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <p className="text-xs text-gray-500 text-center">
+                Approving will upgrade the swimmer's tier, add new skills, record a milestone, and notify the swimmer.
+              </p>
+            </div>
+
+            <div className="flex gap-3 border-t border-gray-100 p-4">
+              <button
+                onClick={() => setTierUpgrade(null)}
+                className="flex-1 rounded-full border border-gray-200 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50"
+              >
+                Not Yet
+              </button>
+              <button
+                onClick={handleApplyUpgrade}
+                disabled={applyingUpgrade}
+                className="flex-1 rounded-full bg-teal-500 py-2.5 text-sm font-medium text-white hover:bg-teal-600 transition disabled:opacity-60"
+              >
+                {applyingUpgrade ? "Upgrading..." : "Approve Upgrade"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <Link href="/coach/students" className="mb-4 inline-block text-gray-400 hover:text-gray-600">&larr;</Link>
 
@@ -478,8 +691,16 @@ export default function StudentProfilePage() {
         </div>
         <div>
           <h1 className="text-xl font-bold text-gray-800">{student.full_name}</h1>
-          {student.age && <p className="text-sm text-gray-500">Age {student.age} {student.level ? `• Level ${student.level}` : ""}</p>}
-          {student.category && <p className="text-xs text-gray-400">{student.category}</p>}
+          {student.age && (
+            <p className="text-sm text-gray-500">
+              Age {student.age}{student.level ? ` • Stage ${student.level}` : ""}
+            </p>
+          )}
+          {student.category && (
+            <span className="inline-block rounded-full bg-teal-100 px-2.5 py-0.5 text-xs font-medium text-teal-700">
+              {student.category}
+            </span>
+          )}
         </div>
       </div>
 
@@ -507,7 +728,13 @@ export default function StudentProfilePage() {
       </div>
 
       {/* Tab content */}
-      {activeTab === "progress" && <ProgressTab skills={skills} />}
+      {activeTab === "progress" && (
+        <ProgressTab
+          skills={skills}
+          onUpdateSkill={handleUpdateSkill}
+          updating={updatingSkill}
+        />
+      )}
       {activeTab === "reflections" && <ReflectionsTab reflections={reflections} studentId={studentId} />}
       {activeTab === "sensory" && <SensoryTab profile={sensoryProfile} />}
       {activeTab === "milestones" && <MilestonesTab milestones={milestones} />}
