@@ -9,7 +9,7 @@ const CONDITIONS = ["Autism", "Intellectual Disability", "Physically Disabled", 
 export default function AddStudentPage() {
   const [fullName, setFullName] = useState("");
   const [age, setAge] = useState("");
-  const [level, setLevel] = useState("1");
+  const [level, setLevel] = useState("");
   const [category, setCategory] = useState("LFA");
   const [conditions, setConditions] = useState<string[]>([]);
   const [sensoryNeeds, setSensoryNeeds] = useState("");
@@ -64,7 +64,7 @@ export default function AddStudentPage() {
     await supabase.from("swimmers").insert({
       id: swimmerId,
       age: age ? parseInt(age) : null,
-      level: parseInt(level),
+      level: level ? parseInt(level) : null,
       category,
       club_id: coachProfile?.club_id ?? null,
     });
@@ -127,6 +127,7 @@ export default function AddStudentPage() {
                 onChange={(e) => setLevel(e.target.value)}
                 className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm focus:border-teal-400 focus:outline-none"
               >
+                <option value="">Not yet assessed</option>
                 {[1, 2, 3, 4].map((l) => <option key={l} value={l}>Level {l}</option>)}
               </select>
             </div>
