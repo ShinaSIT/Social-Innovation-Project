@@ -2,9 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import NotificationBell from "@/app/components/NotificationBell";
+import NotificationPopup from "@/app/components/NotificationPopup";
 
 const navItems = [
   { href: "/swimmer/dashboard", label: "Dashboard", icon: "\u{1F3E0}" },
+  { href: "/swimmer/profile/edit", label: "Profile", icon: "\u{1F464}" },
 ];
 
 export default function SwimmerHeader() {
@@ -12,7 +15,8 @@ export default function SwimmerHeader() {
 
   return (
     <>
-      <a
+      <NotificationPopup /><a
+      
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-teal-600 focus:px-4 focus:py-2 focus:text-sm focus:text-white"
       >
@@ -39,15 +43,18 @@ export default function SwimmerHeader() {
             );
           })}
         </div>
-        <Link
-          href="/swimmer/profile/edit"
-          aria-current={pathname.startsWith("/swimmer/profile") ? "page" : undefined}
-          className={`flex items-center gap-1 text-sm ${
-            pathname.startsWith("/swimmer/profile") ? "text-teal-600 font-medium" : "text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          <span aria-hidden="true">{"\u{1F464}"}</span> Profile
-        </Link>
+        <div className="flex items-center gap-3">
+          <NotificationBell />
+          <Link
+            href="/swimmer/profile/edit"
+            aria-current={pathname.startsWith("/swimmer/profile") ? "page" : undefined}
+            className={`flex items-center gap-1 text-sm ${
+              pathname.startsWith("/swimmer/profile") ? "text-teal-600 font-medium" : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            <span aria-hidden="true">{"\u{1F464}"}</span> Profile
+          </Link>
+        </div>
       </nav>
     </>
   );

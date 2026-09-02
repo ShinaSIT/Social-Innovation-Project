@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import NotificationBell from "@/app/components/NotificationBell";
+import NotificationPopup from "@/app/components/NotificationPopup";
 
 const navItems = [
   { href: "/coach/dashboard", label: "Dashboard", icon: "\u{1F3E0}" },
   { href: "/coach/students", label: "Students", icon: "\u{1F465}" },
   { href: "/coach/toolkit", label: "Visual Toolkit", icon: "\u{1F5BC}" },
   { href: "/coach/training", label: "Training", icon: "\u{1F393}" },
-  
 ];
 
 export default function CoachHeader() {
@@ -16,7 +17,8 @@ export default function CoachHeader() {
 
   return (
     <>
-      <a
+      <NotificationPopup /><a
+      
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-teal-600 focus:px-4 focus:py-2 focus:text-sm focus:text-white"
       >
@@ -43,15 +45,18 @@ export default function CoachHeader() {
             );
           })}
         </div>
-        <Link
-          href="/coach/profile"
-          aria-current={pathname === "/coach/profile" ? "page" : undefined}
-          className={`flex items-center gap-1 text-sm ${
-            pathname === "/coach/profile" ? "text-teal-600 font-medium" : "text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          <span aria-hidden="true">{"\u{1F464}"}</span> Profile
-        </Link>
+        <div className="flex items-center gap-3">
+          <NotificationBell />
+          <Link
+            href="/coach/profile"
+            aria-current={pathname === "/coach/profile" ? "page" : undefined}
+            className={`flex items-center gap-1 text-sm ${
+              pathname === "/coach/profile" ? "text-teal-600 font-medium" : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            <span aria-hidden="true">{"\u{1F464}"}</span> Profile
+          </Link>
+        </div>
       </nav>
     </>
   );

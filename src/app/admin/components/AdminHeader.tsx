@@ -2,11 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import NotificationBell from "@/app/components/NotificationBell";
+import NotificationPopup from "@/app/components/NotificationPopup";
 
 const navItems = [
   { href: "/admin/dashboard", label: "Dashboard", icon: "\u{1F4CA}" },
   { href: "/admin/reports", label: "Reports", icon: "\u{1F4C2}" },
   { href: "/admin/toolkit", label: "Toolkit", icon: "\u{1F4E6}" },
+  { href: "/admin/notifications", label: "Notifications", icon: "\u{1F514}" },
 ];
 
 export default function AdminHeader() {
@@ -14,7 +17,8 @@ export default function AdminHeader() {
 
   return (
     <>
-      <a
+      <NotificationPopup /><a
+      
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-teal-600 focus:px-4 focus:py-2 focus:text-sm focus:text-white"
       >
@@ -40,6 +44,9 @@ export default function AdminHeader() {
               </Link>
             );
           })}
+        </div>
+        <div className="flex items-center gap-3">
+          <NotificationBell />
         </div>
       </nav>
     </>

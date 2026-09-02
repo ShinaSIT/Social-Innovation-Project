@@ -1,10 +1,24 @@
-"use client";
+use client";
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import SwimmerHeader from "@/app/swimmer/components/SwimmerHeader";
+
+interface PersonalDetails {
+  date_of_birth: string;
+  gender: string;
+  address: string;
+  postal_code: string;
+  emergency_contact_name: string;
+  emergency_contact_number: string;
+  emergency_contact_relationship: string;
+  medical_conditions: string;
+  allergies: string;
+  medications: string;
+  additional_medical_notes: string;
+}
 
 interface FormData {
   age: string;
@@ -30,7 +44,6 @@ const CONDITION_OPTIONS = [
   "None",
 ];
 
-// Sanitize text input - strip HTML tags and limit length
 function sanitize(value: string, maxLength = 500): string {
   return value
     .replace(/<[^>]*>/g, "")
@@ -85,13 +98,25 @@ export default function EditSwimmerProfilePage() {
     additional_notes: "",
     consent_given: false,
   });
+  const [personalDetails, setPersonalDetails] = useState<PersonalDetails>({
+    date_of_birth: "",
+    gender: "",
+    address: "",
+    postal_code: "",
+    emergency_contact_name: "",
+    emergency_contact_number: "",
+    emergency_contact_relationship: "",
+    medical_conditions: "",
+    allergies: "",
+    medications: "",
+    additional_medical_notes: "",
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  // Coach request state — must be inside component
   const [coachRequest, setCoachRequest] = useState<{
     id: string;
     status: string;
@@ -192,6 +217,29 @@ export default function EditSwimmerProfilePage() {
         consent_given: swimmerProfile?.consent_given ?? false,
       });
 
+      // Fetch personal details
+      const { data: personalData } = await supabase
+        .from("swimmer_personal_details")
+        .select("*")
+        .eq("swimmer_id", targetSwimmerId)
+        .single();
+
+      if (personalData) {
+        setPersonalDetails({
+          date_of_birth: personalData.date_of_birth ?? "",
+          gender: personalData.gender ?? "",
+          address: personalData.address ?? "",
+          postal_code: personalData.postal_code ?? "",
+          emergency_contact_name: personalData.emergency_contact_name ?? "",
+          emergency_contact_number: personalData.emergency_contact_number ?? "",
+          emergency_contact_relationship: personalData.emergency_contact_relationship ?? "",
+          medical_conditions: personalData.medical_conditions ?? "",
+          allergies: personalData.allergies ?? "",
+          medications: personalData.medications ?? "",
+          additional_medical_notes: personalData.additional_medical_notes ?? "",
+        });
+      }
+
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -260,9 +308,30 @@ export default function EditSwimmerProfilePage() {
           additional_notes: form.additional_notes || null,
           consent_given: form.consent_given,
           updated_at: new Date().toISOString(),
-        });
+        }, { onConflict: "swimmer_id" });
 
       if (profileError) throw new Error("Failed to save profile: " + profileError.message);
+
+      // Save personal details
+      const { error: personalError } = await supabase
+        .from("swimmer_personal_details")
+        .upsert({
+          swimmer_id: swimmerId,
+          date_of_birth: personalDetails.date_of_birth || null,
+          gender: personalDetails.gender || null,
+          address: sanitize(personalDetails.address, 300) || null,
+          postal_code: sanitize(personalDetails.postal_code, 20) || null,
+          emergency_contact_name: sanitize(personalDetails.emergency_contact_name, 100) || null,
+          emergency_contact_number: sanitize(personalDetails.emergency_contact_number, 20) || null,
+          emergency_contact_relationship: sanitize(personalDetails.emergency_contact_relationship, 100) || null,
+          medical_conditions: sanitize(personalDetails.medical_conditions, 500) || null,
+          allergies: sanitize(personalDetails.allergies, 500) || null,
+          medications: sanitize(personalDetails.medications, 500) || null,
+          additional_medical_notes: sanitize(personalDetails.additional_medical_notes, 500) || null,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "swimmer_id" });
+
+      if (personalError) throw new Error("Failed to save personal details: " + personalError.message);
 
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
@@ -377,7 +446,7 @@ export default function EditSwimmerProfilePage() {
 
         {/* Basic Information */}
         <div className="rounded-xl bg-white p-4 shadow-sm">
-          <h2 className="mb-3 font-semibold text-gray-800"> Basic Information</h2>
+          <h2 className="mb-3 font-semibold text-gray-800">&#128100; Basic Information</h2>
           <label className="mb-1 block text-sm text-gray-600">Age</label>
           <input
             type="number"
@@ -389,9 +458,152 @@ export default function EditSwimmerProfilePage() {
           />
         </div>
 
+        {/* Personal Details */}
+        <div className="rounded-xl bg-white p-4 shadow-sm space-y-4">
+          <h2 className="font-semibold text-gray-800">&#128196; Personal Details</h2>
+
+          <div>
+            <label className="mb-1 block text-xs text-gray-500">Date of Birth</label>
+            <input
+              type="date"
+              value={personalDetails.date_of_birth}
+              onChange={(e) => setPersonalDetails((prev) => ({ ...prev, date_of_birth: e.target.value }))}
+              className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-700 focus:border-teal-400 focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs text-gray-500">Gender</label>
+            <select
+              value={personalDetails.gender}
+              onChange={(e) => setPersonalDetails((prev) => ({ ...prev, gender: e.target.value }))}
+              className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-700 focus:border-teal-400 focus:outline-none"
+            >
+              <option value="">-- Select gender --</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="non_binary">Non-binary</option>
+              <option value="prefer_not_to_say">Prefer not to say</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs text-gray-500">Address</label>
+            <textarea
+              value={personalDetails.address}
+              onChange={(e) => setPersonalDetails((prev) => ({ ...prev, address: e.target.value }))}
+              placeholder="e.g. 123 Orchard Road, #01-01"
+              rows={2}
+              className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:border-teal-400 focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs text-gray-500">Postal Code</label>
+            <input
+              type="text"
+              value={personalDetails.postal_code}
+              onChange={(e) => setPersonalDetails((prev) => ({ ...prev, postal_code: e.target.value }))}
+              placeholder="e.g. 238801"
+              className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:border-teal-400 focus:outline-none"
+            />
+          </div>
+        </div>
+
+        {/* Emergency Contact */}
+        <div className="rounded-xl bg-white p-4 shadow-sm space-y-4">
+          <h2 className="font-semibold text-gray-800">&#128222; Emergency Contact</h2>
+
+          <div>
+            <label className="mb-1 block text-xs text-gray-500">Contact Name</label>
+            <input
+              type="text"
+              value={personalDetails.emergency_contact_name}
+              onChange={(e) => setPersonalDetails((prev) => ({ ...prev, emergency_contact_name: e.target.value }))}
+              placeholder="e.g. Jane Doe"
+              className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:border-teal-400 focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs text-gray-500">Contact Number</label>
+            <input
+              type="tel"
+              value={personalDetails.emergency_contact_number}
+              onChange={(e) => setPersonalDetails((prev) => ({ ...prev, emergency_contact_number: e.target.value }))}
+              placeholder="e.g. +65 9123 4567"
+              className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:border-teal-400 focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs text-gray-500">Relationship</label>
+            <input
+              type="text"
+              value={personalDetails.emergency_contact_relationship}
+              onChange={(e) => setPersonalDetails((prev) => ({ ...prev, emergency_contact_relationship: e.target.value }))}
+              placeholder="e.g. Parent, Guardian, Sibling"
+              className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:border-teal-400 focus:outline-none"
+            />
+          </div>
+        </div>
+
+        {/* Medical Information */}
+        <div className="rounded-xl bg-white p-4 shadow-sm space-y-4">
+          <h2 className="font-semibold text-gray-800">&#127973; Medical Information</h2>
+
+          <div>
+            <label className="mb-1 block text-xs text-gray-500">Medical Conditions</label>
+            <textarea
+              value={personalDetails.medical_conditions}
+              onChange={(e) => setPersonalDetails((prev) => ({ ...prev, medical_conditions: sanitize(e.target.value, 500) }))}
+              placeholder="e.g. Asthma, Epilepsy..."
+              rows={3}
+              className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:border-teal-400 focus:outline-none"
+            />
+            <p className="mt-0.5 text-right text-xs text-gray-400">{personalDetails.medical_conditions.length}/500</p>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs text-gray-500">Allergies</label>
+            <textarea
+              value={personalDetails.allergies}
+              onChange={(e) => setPersonalDetails((prev) => ({ ...prev, allergies: sanitize(e.target.value, 500) }))}
+              placeholder="e.g. Penicillin, Latex, Peanuts..."
+              rows={2}
+              className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:border-teal-400 focus:outline-none"
+            />
+            <p className="mt-0.5 text-right text-xs text-gray-400">{personalDetails.allergies.length}/500</p>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs text-gray-500">Current Medications</label>
+            <textarea
+              value={personalDetails.medications}
+              onChange={(e) => setPersonalDetails((prev) => ({ ...prev, medications: sanitize(e.target.value, 500) }))}
+              placeholder="e.g. Ritalin 10mg daily..."
+              rows={2}
+              className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:border-teal-400 focus:outline-none"
+            />
+            <p className="mt-0.5 text-right text-xs text-gray-400">{personalDetails.medications.length}/500</p>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs text-gray-500">Additional Medical Notes</label>
+            <textarea
+              value={personalDetails.additional_medical_notes}
+              onChange={(e) => setPersonalDetails((prev) => ({ ...prev, additional_medical_notes: sanitize(e.target.value, 500) }))}
+              placeholder="Any other medical information coaches should know..."
+              rows={3}
+              className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:border-teal-400 focus:outline-none"
+            />
+            <p className="mt-0.5 text-right text-xs text-gray-400">{personalDetails.additional_medical_notes.length}/500</p>
+          </div>
+        </div>
+
         {/* Swimmer Conditions */}
         <div className="rounded-xl bg-white p-4 shadow-sm">
-          <h2 className="mb-1 font-semibold text-gray-800"> Swimmer Conditions</h2>
+          <h2 className="mb-1 font-semibold text-gray-800">&#128336; Swimmer Conditions</h2>
           <p className="mb-3 text-xs text-gray-500">Select all that apply. This helps our coaches provide the best support.</p>
           <div className="space-y-2">
             {CONDITION_OPTIONS.map((c) => (
@@ -410,7 +622,7 @@ export default function EditSwimmerProfilePage() {
 
         {/* Sensory Needs */}
         <div className="rounded-xl bg-white p-4 shadow-sm space-y-4">
-          <h2 className="font-semibold text-gray-800"> Sensory Needs & Issues</h2>
+          <h2 className="font-semibold text-gray-800">&#127800; Sensory Needs & Issues</h2>
           <div>
             <label className="mb-1 block text-xs text-gray-500">Describe any sensory sensitivities or preferences</label>
             <textarea
@@ -469,7 +681,7 @@ export default function EditSwimmerProfilePage() {
 
         {/* Communication & Triggers */}
         <div className="rounded-xl bg-white p-4 shadow-sm space-y-4">
-          <h2 className="font-semibold text-gray-800"> Communication & Triggers</h2>
+          <h2 className="font-semibold text-gray-800">&#128172; Communication & Triggers</h2>
           <div>
             <label className="mb-1 block text-xs text-gray-500">Communication Preference</label>
             <input
@@ -496,7 +708,7 @@ export default function EditSwimmerProfilePage() {
 
         {/* Interests */}
         <div className="rounded-xl bg-white p-4 shadow-sm">
-          <h2 className="mb-1 font-semibold text-gray-800"> Interests & Motivations</h2>
+          <h2 className="mb-1 font-semibold text-gray-800">&#127775; Interests & Motivations</h2>
           <label className="mb-1 block text-xs text-gray-500">What does your swimmer enjoy?</label>
           <textarea
             value={form.interests}
@@ -511,7 +723,7 @@ export default function EditSwimmerProfilePage() {
 
         {/* Additional Notes */}
         <div className="rounded-xl bg-white p-4 shadow-sm">
-          <h2 className="mb-1 font-semibold text-gray-800"> Additional Notes</h2>
+          <h2 className="mb-1 font-semibold text-gray-800">&#128221; Additional Notes</h2>
           <textarea
             value={form.additional_notes}
             onChange={(e) => handleChange("additional_notes", e.target.value)}
@@ -524,7 +736,7 @@ export default function EditSwimmerProfilePage() {
 
         {/* Coach Application Section */}
         <div className="rounded-xl bg-white p-4 shadow-sm">
-          <h2 className="mb-1 font-semibold text-gray-800"> Are you a Coach?</h2>
+          <h2 className="mb-1 font-semibold text-gray-800">&#127941; Are you a Coach?</h2>
           <p className="mb-4 text-xs text-gray-500">
             Fill in your details below and submit an application to your club admin.
           </p>

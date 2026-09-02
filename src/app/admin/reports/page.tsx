@@ -12,6 +12,7 @@ import { saveAs } from "file-saver";
 type ExportFormat = "pdf" | "word" | "csv";
 
 const reportIncludes = [
+  { key: "personal", label: "Personal Details", default: true },
   { key: "proficiency", label: "Proficiency Progress", default: true },
   { key: "milestones", label: "Milestones Achieved", default: true },
   { key: "reflections", label: "Coach Reflections", default: true },
@@ -25,8 +26,23 @@ interface Swimmer {
   name: string;
 }
 
+interface PersonalDetails {
+  date_of_birth: string | null;
+  gender: string | null;
+  address: string | null;
+  postal_code: string | null;
+  emergency_contact_name: string | null;
+  emergency_contact_number: string | null;
+  emergency_contact_relationship: string | null;
+  medical_conditions: string | null;
+  allergies: string | null;
+  medications: string | null;
+  additional_medical_notes: string | null;
+}
+
 interface ReportData {
   swimmer: { name: string; age: number | null; category: string | null; level: number | null };
+  personal: PersonalDetails | null;
   skills: { category: string; skill_name: string; status: string }[];
   milestones: { title: string; achieved_on: string; category: string | null; description: string | null }[];
   reflections: { created_at: string; coach_notes: string | null; parent_feedback: string | null; mood: string | null }[];
@@ -49,6 +65,24 @@ function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("en-US", {
     year: "numeric", month: "long", day: "numeric",
   });
+}
+
+function formatDob(dob: string | null) {
+  if (!dob) return "—";
+  return new Date(dob).toLocaleDateString("en-US", {
+    year: "numeric", month: "long", day: "numeric",
+  });
+}
+
+function formatGender(gender: string | null) {
+  if (!gender) return "—";
+  const map: Record<string, string> = {
+    male: "Male",
+    female: "Female",
+    non_binary: "Non-binary",
+    prefer_not_to_say: "Prefer not to say",
+  };
+  return map[gender] ?? gender;
 }
 
 export default function GenerateReportsPage() {
@@ -136,12 +170,18 @@ export default function GenerateReportsPage() {
       .eq("id", selectedSwimmerId)
       .single();
 
+    // Personal details
+    const { data: personalData } = await supabase
+      .from("swimmer_personal_details")
+      .select("*")
+      .eq("swimmer_id", selectedSwimmerId)
+      .single();
+
     // Skills
-    let skillsQuery = supabase
+    const { data: skills } = await supabase
       .from("skill_progress")
       .select("category, skill_name, status")
       .eq("swimmer_id", selectedSwimmerId);
-    const { data: skills } = await skillsQuery;
 
     // Milestones
     let milestonesQuery = supabase
@@ -204,6 +244,7 @@ export default function GenerateReportsPage() {
         category: swimmerData?.category ?? null,
         level: swimmerData?.level ?? null,
       },
+      personal: personalData ?? null,
       skills: skills ?? [],
       milestones: milestones ?? [],
       reflections: reflections ?? [],
@@ -224,6 +265,26 @@ export default function GenerateReportsPage() {
     rows.push(["Category", data.swimmer.category ?? "—"]);
     rows.push(["Generated", new Date().toLocaleDateString()]);
     rows.push([]);
+
+    if (includes.personal && data.personal) {
+      rows.push(["PERSONAL DETAILS"]);
+      rows.push(["Date of Birth", formatDob(data.personal.date_of_birth)]);
+      rows.push(["Gender", formatGender(data.personal.gender)]);
+      rows.push(["Address", data.personal.address ?? "—"]);
+      rows.push(["Postal Code", data.personal.postal_code ?? "—"]);
+      rows.push([]);
+      rows.push(["EMERGENCY CONTACT"]);
+      rows.push(["Name", data.personal.emergency_contact_name ?? "—"]);
+      rows.push(["Number", data.personal.emergency_contact_number ?? "—"]);
+      rows.push(["Relationship", data.personal.emergency_contact_relationship ?? "—"]);
+      rows.push([]);
+      rows.push(["MEDICAL INFORMATION"]);
+      rows.push(["Medical Conditions", data.personal.medical_conditions ?? "—"]);
+      rows.push(["Allergies", data.personal.allergies ?? "—"]);
+      rows.push(["Medications", data.personal.medications ?? "—"]);
+      rows.push(["Additional Medical Notes", data.personal.additional_medical_notes ?? "—"]);
+      rows.push([]);
+    }
 
     if (includes.proficiency) {
       rows.push(["SKILL PROGRESS"]);
@@ -314,6 +375,55 @@ export default function GenerateReportsPage() {
       doc.line(14, y, 196, y);
       y += 6;
     };
+
+    // Personal Details
+    if (includes.personal && data.personal) {
+      addSection("Personal Details");
+      autoTable(doc, {
+        startY: y,
+        body: [
+          ["Date of Birth", formatDob(data.personal.date_of_birth)],
+          ["Gender", formatGender(data.personal.gender)],
+          ["Address", `${data.personal.address ?? "—"}${data.personal.postal_code ? ` S(${data.personal.postal_code})` : ""}`],
+        ],
+        theme: "striped",
+        bodyStyles: { fontSize: 9 },
+        columnStyles: { 0: { fontStyle: "bold", cellWidth: 60 } },
+        margin: { left: 14, right: 14 },
+      });
+      y = (doc as any).lastAutoTable.finalY + 4;
+
+      addSection("Emergency Contact");
+      autoTable(doc, {
+        startY: y,
+        body: [
+          ["Name", data.personal.emergency_contact_name ?? "—"],
+          ["Number", data.personal.emergency_contact_number ?? "—"],
+          ["Relationship", data.personal.emergency_contact_relationship ?? "—"],
+        ],
+        theme: "striped",
+        bodyStyles: { fontSize: 9 },
+        columnStyles: { 0: { fontStyle: "bold", cellWidth: 60 } },
+        margin: { left: 14, right: 14 },
+      });
+      y = (doc as any).lastAutoTable.finalY + 4;
+
+      addSection("Medical Information");
+      autoTable(doc, {
+        startY: y,
+        body: [
+          ["Medical Conditions", data.personal.medical_conditions ?? "—"],
+          ["Allergies", data.personal.allergies ?? "—"],
+          ["Medications", data.personal.medications ?? "—"],
+          ["Additional Notes", data.personal.additional_medical_notes ?? "—"],
+        ],
+        theme: "striped",
+        bodyStyles: { fontSize: 9 },
+        columnStyles: { 0: { fontStyle: "bold", cellWidth: 60 } },
+        margin: { left: 14, right: 14 },
+      });
+      y = (doc as any).lastAutoTable.finalY + 4;
+    }
 
     // Skills
     if (includes.proficiency && data.skills.length > 0) {
@@ -433,13 +543,6 @@ export default function GenerateReportsPage() {
   };
 
   const generateWord = async (data: ReportData) => {
-    const noBorder = {
-      top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-      bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-      left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-      right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-    };
-
     const sectionHeading = (text: string) =>
       new Paragraph({
         text,
@@ -491,6 +594,39 @@ export default function GenerateReportsPage() {
       new Paragraph({ text: `Category: ${data.swimmer.category ?? "—"}`, spacing: { after: 50 } }),
       new Paragraph({ text: `Generated: ${new Date().toLocaleDateString()}`, spacing: { after: 300 } }),
     ];
+
+    if (includes.personal && data.personal) {
+      children.push(sectionHeading("Personal Details"));
+      children.push(tableFromRows(
+        ["Field", "Value"],
+        [
+          ["Date of Birth", formatDob(data.personal.date_of_birth)],
+          ["Gender", formatGender(data.personal.gender)],
+          ["Address", `${data.personal.address ?? "—"}${data.personal.postal_code ? ` S(${data.personal.postal_code})` : ""}`],
+        ]
+      ));
+
+      children.push(sectionHeading("Emergency Contact"));
+      children.push(tableFromRows(
+        ["Field", "Value"],
+        [
+          ["Name", data.personal.emergency_contact_name ?? "—"],
+          ["Number", data.personal.emergency_contact_number ?? "—"],
+          ["Relationship", data.personal.emergency_contact_relationship ?? "—"],
+        ]
+      ));
+
+      children.push(sectionHeading("Medical Information"));
+      children.push(tableFromRows(
+        ["Field", "Value"],
+        [
+          ["Medical Conditions", data.personal.medical_conditions ?? "—"],
+          ["Allergies", data.personal.allergies ?? "—"],
+          ["Medications", data.personal.medications ?? "—"],
+          ["Additional Notes", data.personal.additional_medical_notes ?? "—"],
+        ]
+      ));
+    }
 
     if (includes.proficiency && data.skills.length > 0) {
       children.push(sectionHeading("Skill Progress"));
@@ -590,119 +726,119 @@ export default function GenerateReportsPage() {
     <div className="min-h-screen bg-gray-50">
       <AdminHeader />
       <div id="main-content" tabIndex={-1} className="p-6">
-      <h1 className="text-xl font-bold text-gray-800">Generate Reports</h1>
-      <p className="mb-6 text-sm text-gray-500">Export swimmer progress and assessment data</p>
+        <h1 className="text-xl font-bold text-gray-800">Generate Reports</h1>
+        <p className="mb-6 text-sm text-gray-500">Export swimmer progress and assessment data</p>
 
-      {/* Swimmer Selection */}
-      <div className="mb-6 rounded-xl bg-white p-4 shadow-sm">
-        <label className="mb-2 block text-sm font-medium text-gray-700">Select Swimmer</label>
-        {loading ? (
-          <p className="text-sm text-gray-500">Loading swimmers...</p>
-        ) : (
-          <select
-            value={selectedSwimmerId}
-            onChange={(e) => setSelectedSwimmerId(e.target.value)}
-            className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-700 focus:border-teal-400 focus:outline-none"
-          >
-            <option value="">-- Select a swimmer --</option>
-            {swimmers.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
-        )}
-      </div>
-
-      {/* Include in Report */}
-      <div className="mb-6 rounded-xl bg-white p-4 shadow-sm">
-        <h2 className="mb-3 text-sm font-medium text-gray-700">Include in Report</h2>
-        <div className="space-y-2">
-          {reportIncludes.map((item) => (
-            <label key={item.key} className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={includes[item.key]}
-                onChange={() => toggleInclude(item.key)}
-                className="h-4 w-4 rounded border-gray-300 text-teal-500 focus:ring-teal-400"
-              />
-              <span className="text-sm text-gray-700">{item.label}</span>
-            </label>
-          ))}
-        </div>
-      </div>
-
-      {/* Date Range */}
-      <div className="mb-6 rounded-xl bg-white p-4 shadow-sm">
-        <h2 className="mb-3 text-sm font-medium text-gray-700">📅 Date Range (Optional)</h2>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="mb-1 block text-xs text-gray-500">Start Date</label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-700 focus:border-teal-400 focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs text-gray-500">End Date</label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-700 focus:border-teal-400 focus:outline-none"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Export Format */}
-      <div className="mb-8 rounded-xl bg-white p-4 shadow-sm">
-        <h2 className="mb-3 text-sm font-medium text-gray-700">Export Format</h2>
-        <div className="grid grid-cols-3 gap-3">
-          {([
-            { key: "pdf" as ExportFormat, label: "PDF", desc: "Print-ready", icon: "📄" },
-            { key: "word" as ExportFormat, label: "Word", desc: "Editable", icon: "📝" },
-            { key: "csv" as ExportFormat, label: "CSV", desc: "Data only", icon: "📊" },
-          ]).map((f) => (
-            <button
-              key={f.key}
-              onClick={() => setFormat(f.key)}
-              className={`rounded-xl border-2 p-4 text-center transition ${
-                format === f.key
-                  ? "border-teal-500 bg-teal-50"
-                  : "border-gray-200 bg-white hover:border-gray-300"
-              }`}
+        {/* Swimmer Selection */}
+        <div className="mb-6 rounded-xl bg-white p-4 shadow-sm">
+          <label className="mb-2 block text-sm font-medium text-gray-700">Select Swimmer</label>
+          {loading ? (
+            <p className="text-sm text-gray-500">Loading swimmers...</p>
+          ) : (
+            <select
+              value={selectedSwimmerId}
+              onChange={(e) => setSelectedSwimmerId(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-700 focus:border-teal-400 focus:outline-none"
             >
-              <p className="text-lg mb-1">{f.icon}</p>
-              <p className="text-sm font-medium text-gray-800">{f.label}</p>
-              <p className="text-xs text-gray-500">{f.desc}</p>
-            </button>
-          ))}
+              <option value="">-- Select a swimmer --</option>
+              {swimmers.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          )}
         </div>
-      </div>
 
-      {error && (
-        <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">
-          {error}
+        {/* Include in Report */}
+        <div className="mb-6 rounded-xl bg-white p-4 shadow-sm">
+          <h2 className="mb-3 text-sm font-medium text-gray-700">Include in Report</h2>
+          <div className="space-y-2">
+            {reportIncludes.map((item) => (
+              <label key={item.key} className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includes[item.key]}
+                  onChange={() => toggleInclude(item.key)}
+                  className="h-4 w-4 rounded border-gray-300 text-teal-500 focus:ring-teal-400"
+                />
+                <span className="text-sm text-gray-700">{item.label}</span>
+              </label>
+            ))}
+          </div>
         </div>
-      )}
 
-      {/* Actions */}
-      <div className="flex gap-3">
-        <Link
-          href="/admin/dashboard"
-          className="flex-1 rounded-lg border border-gray-200 py-3 text-center text-sm font-medium text-gray-600 hover:bg-gray-50"
-        >
-          Cancel
-        </Link>
-        <button
-          onClick={handleGenerate}
-          disabled={generating || !selectedSwimmerId}
-          className="flex-1 rounded-lg bg-teal-500 py-3 text-sm font-medium text-white hover:bg-teal-600 transition disabled:opacity-60"
-        >
-          {generating ? "Generating..." : "📊 Generate & Download"}
-        </button>
-      </div>
+        {/* Date Range */}
+        <div className="mb-6 rounded-xl bg-white p-4 shadow-sm">
+          <h2 className="mb-3 text-sm font-medium text-gray-700">&#128197; Date Range (Optional)</h2>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs text-gray-500">Start Date</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-700 focus:border-teal-400 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-gray-500">End Date</label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-700 focus:border-teal-400 focus:outline-none"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Export Format */}
+        <div className="mb-8 rounded-xl bg-white p-4 shadow-sm">
+          <h2 className="mb-3 text-sm font-medium text-gray-700">Export Format</h2>
+          <div className="grid grid-cols-3 gap-3">
+            {([
+              { key: "pdf" as ExportFormat, label: "PDF", desc: "Print-ready", icon: "&#128196;" },
+              { key: "word" as ExportFormat, label: "Word", desc: "Editable", icon: "&#128221;" },
+              { key: "csv" as ExportFormat, label: "CSV", desc: "Data only", icon: "&#128202;" },
+            ]).map((f) => (
+              <button
+                key={f.key}
+                onClick={() => setFormat(f.key)}
+                className={`rounded-xl border-2 p-4 text-center transition ${
+                  format === f.key
+                    ? "border-teal-500 bg-teal-50"
+                    : "border-gray-200 bg-white hover:border-gray-300"
+                }`}
+              >
+                <p className="text-lg mb-1" dangerouslySetInnerHTML={{ __html: f.icon }} />
+                <p className="text-sm font-medium text-gray-800">{f.label}</p>
+                <p className="text-xs text-gray-500">{f.desc}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {error && (
+          <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">
+            {error}
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex gap-3">
+          <Link
+            href="/admin/dashboard"
+            className="flex-1 rounded-lg border border-gray-200 py-3 text-center text-sm font-medium text-gray-600 hover:bg-gray-50"
+          >
+            Cancel
+          </Link>
+          <button
+            onClick={handleGenerate}
+            disabled={generating || !selectedSwimmerId}
+            className="flex-1 rounded-lg bg-teal-500 py-3 text-sm font-medium text-white hover:bg-teal-600 transition disabled:opacity-60"
+          >
+            {generating ? "Generating..." : "&#128202; Generate & Download"}
+          </button>
+        </div>
       </div>
     </div>
   );
