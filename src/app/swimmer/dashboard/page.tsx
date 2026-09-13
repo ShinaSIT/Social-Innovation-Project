@@ -270,7 +270,7 @@ export default function SwimmerDashboardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen page-shell bg-gray-50 flex items-center justify-center">
         <p className="text-sm text-gray-500">Loading dashboard...</p>
       </div>
     );
@@ -278,14 +278,14 @@ export default function SwimmerDashboardPage() {
 
   if (error || !swimmer) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen page-shell bg-gray-50 flex items-center justify-center">
         <p className="text-sm text-red-500">{error ?? "Could not load dashboard."}</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen page-shell bg-gray-50">
       <SwimmerHeader />
 
       {/* Header with gradient */}

@@ -93,7 +93,7 @@ export default function AddStudentPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 pb-12">
+    <div className="min-h-screen page-shell-narrow bg-gray-50 p-6 pb-12">
       <div className="mb-6 flex items-center gap-2">
         <Link href="/coach/students" className="text-gray-400 hover:text-gray-600">&larr;</Link>
         <h1 className="text-xl font-bold text-gray-800">Add Student</h1>
@@ -112,7 +112,7 @@ export default function AddStudentPage() {
               className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm focus:border-teal-400 focus:outline-none"
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-sm text-gray-600">Age</label>
               <input

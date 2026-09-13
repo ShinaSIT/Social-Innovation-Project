@@ -604,7 +604,7 @@ export default function StudentProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen page-shell bg-gray-50 flex items-center justify-center">
         <p className="text-sm text-gray-500">Loading student profile...</p>
       </div>
     );
@@ -612,14 +612,14 @@ export default function StudentProfilePage() {
 
   if (error || !student) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen page-shell bg-gray-50 flex items-center justify-center">
         <p className="text-sm text-red-500">{error ?? "Student not found."}</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen page-shell bg-gray-50 p-6">
       {/* Tier Upgrade Modal */}
       {tierUpgrade && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4">

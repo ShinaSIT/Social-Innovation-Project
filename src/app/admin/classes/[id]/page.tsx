@@ -323,7 +323,7 @@ export default function ClassDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen page-shell bg-gray-50">
         <AdminHeader />
         <div className="p-6 text-sm text-gray-500">Loading class...</div>
       </div>
@@ -332,7 +332,7 @@ export default function ClassDetailPage() {
 
   if (error || !classInfo) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen page-shell bg-gray-50">
         <AdminHeader />
         <div className="p-6 text-sm text-red-500">{error ?? "Class not found."}</div>
       </div>
@@ -340,7 +340,7 @@ export default function ClassDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen page-shell bg-gray-50">
       <AdminHeader />
       <div id="main-content" tabIndex={-1} className="p-6 max-w-7xl">
         <div className="max-w-2xl">
@@ -381,7 +381,7 @@ export default function ClassDetailPage() {
               />
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div>
                 <label className="mb-1 block text-sm text-gray-600">Day</label>
                 <select
@@ -414,7 +414,7 @@ export default function ClassDetailPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className="mb-1 block text-sm text-gray-600">Capacity (optional)</label>
                 <input

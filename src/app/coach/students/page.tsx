@@ -242,7 +242,7 @@ export default function MyStudentsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen page-shell bg-gray-50 flex items-center justify-center">
         <p className="text-sm text-gray-500">Loading students...</p>
       </div>
     );
@@ -250,7 +250,7 @@ export default function MyStudentsPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen page-shell bg-gray-50 flex items-center justify-center">
         <p className="text-sm text-red-500">{error}</p>
       </div>
     );
@@ -259,7 +259,7 @@ export default function MyStudentsPage() {
   // ── Certification pending gate ──────────────────────────────
   if (coachMeta?.coach_type === "independent" && coachMeta?.cert_status !== "verified") {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen page-shell bg-gray-50">
         <CoachHeader />
         <div id="main-content" tabIndex={-1} className="p-6">
           <div className="mb-1 flex items-center gap-2">
@@ -290,7 +290,7 @@ export default function MyStudentsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen page-shell bg-gray-50">
       <CoachHeader />
       <div id="main-content" tabIndex={-1} className="p-6">
       {/* Header */}

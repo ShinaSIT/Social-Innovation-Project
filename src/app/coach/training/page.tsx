@@ -91,7 +91,7 @@ function ActionButton({ status }: { status: ModuleStatus }) {
 
 export default function CoachTrainingPage() {
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen page-shell bg-gray-50">
       <CoachHeader />
       <div id="main-content" tabIndex={-1} className="p-6">
       {/* Header */}
