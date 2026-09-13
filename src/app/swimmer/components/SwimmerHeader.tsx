@@ -30,6 +30,10 @@ export default function SwimmerHeader() {
       >
         <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-y-2 px-4 py-3 sm:px-6">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+            {/* Plain text, not a link: the Dashboard item sits right beside it
+                and already points at the same place. */}
+            <span className="text-base font-bold tracking-tight text-gray-800 sm:text-lg">AquaBridge</span>
+            <span className="hidden h-4 w-px bg-gray-200 sm:block" aria-hidden="true" />
             {navItems.map((item) => {
               const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
               return (
