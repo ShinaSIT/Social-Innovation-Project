@@ -11,6 +11,7 @@ const navItems = [
   { href: "/coach/students", label: "Students", icon: "\u{1F465}" },
   { href: "/coach/toolkit", label: "Visual Toolkit", icon: "\u{1F5BC}" },
   { href: "/coach/training", label: "Training", icon: "\u{1F393}" },
+  { href: "/coach/timetables", label: "Timetables", icon: "\u{1F4C4}" },
 ];
 
 export default function CoachHeader() {

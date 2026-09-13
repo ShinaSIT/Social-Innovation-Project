@@ -10,6 +10,7 @@ import UserMenu from "@/app/components/UserMenu";
 // deliberately not repeated here.
 const navItems = [
   { href: "/swimmer/dashboard", label: "Dashboard", icon: "\u{1F3E0}" },
+  { href: "/swimmer/timetables", label: "Timetables", icon: "\u{1F4C4}" },
 ];
 
 export default function SwimmerHeader() {

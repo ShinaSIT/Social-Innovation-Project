@@ -11,6 +11,7 @@ const navItems = [
   { href: "/admin/calendar", label: "Calendar", icon: "\u{1F5D3}\u{FE0F}" },
   { href: "/admin/term-schedules", label: "Term Schedules", icon: "\u{1F4C5}" },
   { href: "/admin/reports", label: "Reports", icon: "\u{1F4C2}" },
+  { href: "/admin/timetables", label: "Timetables", icon: "\u{1F4C4}" },
   { href: "/admin/toolkit", label: "Toolkit", icon: "\u{1F4E6}" },
   { href: "/admin/notifications", label: "Notifications", icon: "\u{1F514}" },
 ];
