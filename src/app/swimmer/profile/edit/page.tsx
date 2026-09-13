@@ -135,10 +135,13 @@ export default function EditSwimmerProfilePage() {
   const [requestError, setRequestError] = useState<string | null>(null);
   const [requestSuccess, setRequestSuccess] = useState<string | null>(null);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  // Set when arriving straight from registration (?welcome=1).
+  const [welcome, setWelcome] = useState(false);
 
   const router = useRouter();
 
   useEffect(() => {
+    setWelcome(new URLSearchParams(window.location.search).get("welcome") === "1");
     fetchProfile();
   }, []);
 
@@ -280,13 +283,17 @@ export default function EditSwimmerProfilePage() {
     const supabase = createClient();
 
     try {
-      if (form.age) {
-        const { error: swimmerError } = await supabase
-          .from("swimmers")
-          .update({ age: parseInt(form.age) })
-          .eq("id", swimmerId);
-        if (swimmerError) throw new Error("Failed to update age.");
-      }
+      // Always upsert, even with no age entered: a self-registered swimmer has
+      // no swimmers row (only the coach's add-student flow inserts one) and the
+      // dashboard reads from it. Age is omitted from the payload rather than
+      // sent as null when blank, so a blank field never wipes an existing age.
+      const swimmerRow: { id: string; age?: number } = { id: swimmerId };
+      if (form.age) swimmerRow.age = parseInt(form.age);
+
+      const { error: swimmerError } = await supabase
+        .from("swimmers")
+        .upsert(swimmerRow, { onConflict: "id" });
+      if (swimmerError) throw new Error("Failed to save swimmer record: " + swimmerError.message);
 
       const triggersArray = form.known_triggers
         ? form.known_triggers.split(",").map((t) => sanitize(t.trim(), 100)).filter((t) => t.length > 0)
@@ -332,6 +339,11 @@ export default function EditSwimmerProfilePage() {
         }, { onConflict: "swimmer_id" });
 
       if (personalError) throw new Error("Failed to save personal details: " + personalError.message);
+
+      if (welcome) {
+        router.push("/swimmer/dashboard");
+        return;
+      }
 
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
@@ -443,6 +455,17 @@ export default function EditSwimmerProfilePage() {
       </div>
 
       <form onSubmit={handleSave} className="px-6 pb-8 space-y-6">
+
+        {welcome && (
+          <div className="rounded-xl bg-teal-50 px-4 py-3 text-sm text-teal-800">
+            <p className="font-semibold">Welcome to AquaBridge!</p>
+            <p className="mt-1 text-teal-700">
+              Your account is ready. Fill in your personal details below so your
+              coach can plan sessions around your needs. You can change any of
+              this later from your profile.
+            </p>
+          </div>
+        )}
 
         {/* Basic Information */}
         <div className="rounded-xl bg-white p-4 shadow-sm">

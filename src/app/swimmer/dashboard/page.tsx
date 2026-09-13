@@ -108,13 +108,14 @@ export default function SwimmerDashboardPage() {
 
       if (profileError) throw new Error("Failed to load swimmer profile.");
 
-      const { data: swimmerData, error: swimmerError } = await supabase
+      // maybeSingle, and no throw: a swimmer who registered for themselves and
+      // has not filled in their profile yet has no swimmers row. That should
+      // render as an empty dashboard, not an error screen.
+      const { data: swimmerData } = await supabase
         .from("swimmers")
         .select("age, category, progress")
         .eq("id", swimmerId)
-        .single();
-
-      if (swimmerError) throw new Error("Failed to load swimmer data.");
+        .maybeSingle();
 
       setSwimmer({
         id: swimmerId,
