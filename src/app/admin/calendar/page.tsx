@@ -645,7 +645,7 @@ export default function AdminCalendarPage() {
     : dayClasses;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen page-shell bg-gray-50">
       <AdminHeader />
       <div id="main-content" tabIndex={-1} className="p-6">
         <div className="mb-4 flex items-center justify-between">

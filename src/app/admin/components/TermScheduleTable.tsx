@@ -44,7 +44,8 @@ export default function TermScheduleTable({
         </div>
       )}
 
-      <table className="w-full table-fixed text-sm">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[36rem] table-fixed text-sm">
         <thead>
           <tr className="border-b border-gray-100 bg-gray-50 text-left text-xs text-gray-500">
             <th className="w-[15%] py-2 pl-2 pr-4">Month</th>
@@ -88,6 +89,7 @@ export default function TermScheduleTable({
           })}
         </tbody>
       </table>
+      </div>
 
       {term.monthNotes.length > 0 && (
         <div className="mt-3 space-y-1 border-t border-gray-100 pt-3">

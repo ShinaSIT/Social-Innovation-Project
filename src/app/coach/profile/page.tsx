@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import CoachHeader from "@/app/coach/components/CoachHeader";
 
@@ -77,7 +76,6 @@ export default function CoachProfilePage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const router = useRouter();
 
   useEffect(() => {
     fetchProfile();
@@ -266,7 +264,7 @@ export default function CoachProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen page-shell-narrow bg-gray-50 flex items-center justify-center">
         <p className="text-sm text-gray-500">Loading profile...</p>
       </div>
     );
@@ -274,14 +272,14 @@ export default function CoachProfilePage() {
 
   if (error || !profile) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen page-shell-narrow bg-gray-50 flex items-center justify-center">
         <p className="text-sm text-red-500">{error ?? "Profile not found."}</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen page-shell-narrow bg-gray-50">
       <CoachHeader />
       <div id="main-content" tabIndex={-1} className="p-6">
       {/* Header */}
@@ -517,18 +515,6 @@ export default function CoachProfilePage() {
           </div>
         </div>
       )}
-
-      {/* Logout */}
-      <button
-        onClick={async () => {
-          const supabase = createClient();
-          await supabase.auth.signOut();
-          router.push("/login");
-        }}
-        className="mt-8 w-full rounded-lg border border-red-200 py-3 text-sm font-medium text-red-600 hover:bg-red-50 transition"
-      >
-        Log Out
-      </button>
       </div>
     </div>
   );

@@ -186,7 +186,7 @@ export default function AdminClassesPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen page-shell bg-gray-50">
         <AdminHeader />
         <div className="p-6 text-sm text-gray-500">Loading classes...</div>
       </div>
@@ -194,7 +194,7 @@ export default function AdminClassesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen page-shell bg-gray-50">
       <AdminHeader />
       <div id="main-content" tabIndex={-1} className="p-6">
         <div className="mb-4 flex items-center justify-between">
@@ -228,7 +228,7 @@ export default function AdminClassesPage() {
               />
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div>
                 <label className="mb-1 block text-sm text-gray-600">Day</label>
                 <select
@@ -261,7 +261,7 @@ export default function AdminClassesPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className="mb-1 block text-sm text-gray-600">Capacity (optional)</label>
                 <input

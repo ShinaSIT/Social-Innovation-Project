@@ -144,7 +144,7 @@ export default function NewReflectionPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen page-shell-narrow bg-gray-50 flex items-center justify-center">
         <p className="text-sm text-gray-500">Loading...</p>
       </div>
     );
@@ -152,7 +152,7 @@ export default function NewReflectionPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen page-shell-narrow bg-gray-50">
         <CoachHeader />
         <div className="flex flex-col items-center justify-center px-6 py-16">
           <p className="mb-4 text-sm text-red-500">{error}</p>
@@ -168,7 +168,7 @@ export default function NewReflectionPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen page-shell-narrow bg-gray-50">
       <CoachHeader />
 
       <div id="main-content" tabIndex={-1} className="px-6 pt-6 pb-8">

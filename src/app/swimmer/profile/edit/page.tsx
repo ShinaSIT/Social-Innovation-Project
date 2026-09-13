@@ -55,6 +55,74 @@ function sanitizeNumber(value: string): string {
   return value.replace(/[^0-9]/g, "").slice(0, 3);
 }
 
+const SCALE_VALUES = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"];
+
+// A 0-10 scale as a row of buttons. Real radio inputs under the hood -- visually
+// hidden, styled via the wrapping label -- so arrow-key navigation and
+// screen-reader semantics come from the platform rather than being reimplemented.
+// An unset scale is meaningful (it stores as null), hence the Clear affordance:
+// a radio group cannot otherwise be emptied once a value is picked.
+function ScaleSelect({
+  name,
+  label,
+  value,
+  onChange,
+  lowLabel,
+  highLabel,
+}: {
+  name: string;
+  label: string;
+  value: string;
+  onChange: (next: string) => void;
+  lowLabel: string;
+  highLabel: string;
+}) {
+  return (
+    <div>
+      <div className="mb-1 flex items-baseline justify-between gap-2">
+        <span className="text-xs text-gray-500">{label}</span>
+        {value !== "" && (
+          <button
+            type="button"
+            onClick={() => onChange("")}
+            className="text-xs text-teal-600 underline-offset-2 hover:underline"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+      <div role="radiogroup" aria-label={label} className="grid grid-cols-6 gap-1.5 sm:grid-cols-11">
+        {SCALE_VALUES.map((v) => {
+          const selected = value === v;
+          return (
+            <label
+              key={v}
+              className={`flex h-10 cursor-pointer items-center justify-center rounded-lg border text-sm font-medium transition focus-within:ring-2 focus-within:ring-teal-400 ${selected
+                  ? "border-teal-500 bg-teal-500 text-white"
+                  : "border-gray-200 bg-white text-gray-600 hover:border-teal-300 hover:bg-teal-50"
+                }`}
+            >
+              <input
+                type="radio"
+                name={name}
+                value={v}
+                checked={selected}
+                onChange={() => onChange(v)}
+                className="sr-only"
+              />
+              {v}
+            </label>
+          );
+        })}
+      </div>
+      <div className="mt-1 flex justify-between text-xs text-gray-400">
+        <span>0 &mdash; {lowLabel}</span>
+        <span>10 &mdash; {highLabel}</span>
+      </div>
+    </div>
+  );
+}
+
 function validateForm(form: FormData): string | null {
   const age = parseInt(form.age);
   if (form.age && (isNaN(age) || age < 1 || age > 120)) {
@@ -135,10 +203,13 @@ export default function EditSwimmerProfilePage() {
   const [requestError, setRequestError] = useState<string | null>(null);
   const [requestSuccess, setRequestSuccess] = useState<string | null>(null);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  // Set when arriving straight from registration (?welcome=1).
+  const [welcome, setWelcome] = useState(false);
 
   const router = useRouter();
 
   useEffect(() => {
+    setWelcome(new URLSearchParams(window.location.search).get("welcome") === "1");
     fetchProfile();
   }, []);
 
@@ -280,13 +351,17 @@ export default function EditSwimmerProfilePage() {
     const supabase = createClient();
 
     try {
-      if (form.age) {
-        const { error: swimmerError } = await supabase
-          .from("swimmers")
-          .update({ age: parseInt(form.age) })
-          .eq("id", swimmerId);
-        if (swimmerError) throw new Error("Failed to update age.");
-      }
+      // Always upsert, even with no age entered: a self-registered swimmer has
+      // no swimmers row (only the coach's add-student flow inserts one) and the
+      // dashboard reads from it. Age is omitted from the payload rather than
+      // sent as null when blank, so a blank field never wipes an existing age.
+      const swimmerRow: { id: string; age?: number } = { id: swimmerId };
+      if (form.age) swimmerRow.age = parseInt(form.age);
+
+      const { error: swimmerError } = await supabase
+        .from("swimmers")
+        .upsert(swimmerRow, { onConflict: "id" });
+      if (swimmerError) throw new Error("Failed to save swimmer record: " + swimmerError.message);
 
       const triggersArray = form.known_triggers
         ? form.known_triggers.split(",").map((t) => sanitize(t.trim(), 100)).filter((t) => t.length > 0)
@@ -332,6 +407,11 @@ export default function EditSwimmerProfilePage() {
         }, { onConflict: "swimmer_id" });
 
       if (personalError) throw new Error("Failed to save personal details: " + personalError.message);
+
+      if (welcome) {
+        router.push("/swimmer/dashboard");
+        return;
+      }
 
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
@@ -417,7 +497,7 @@ export default function EditSwimmerProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen page-shell-narrow bg-gray-50 flex items-center justify-center">
         <p className="text-sm text-gray-500">Loading profile...</p>
       </div>
     );
@@ -425,14 +505,14 @@ export default function EditSwimmerProfilePage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen page-shell-narrow bg-gray-50 flex items-center justify-center">
         <p className="text-sm text-red-500">{error}</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen page-shell-narrow bg-gray-50">
       <SwimmerHeader />
       <div id="main-content" tabIndex={-1} className="bg-gradient-to-b from-teal-50 to-gray-50 px-6 pt-6 pb-8 text-center">
         <div className="mx-auto mb-2 flex h-16 w-16 items-center justify-center rounded-full bg-teal-100 text-2xl font-bold text-teal-700">
@@ -443,6 +523,17 @@ export default function EditSwimmerProfilePage() {
       </div>
 
       <form onSubmit={handleSave} className="px-6 pb-8 space-y-6">
+
+        {welcome && (
+          <div className="rounded-xl bg-teal-50 px-4 py-3 text-sm text-teal-800">
+            <p className="font-semibold">Welcome to AquaBridge!</p>
+            <p className="mt-1 text-teal-700">
+              Your account is ready. Fill in your personal details below so your
+              coach can plan sessions around your needs. You can change any of
+              this later from your profile.
+            </p>
+          </div>
+        )}
 
         {/* Basic Information */}
         <div className="rounded-xl bg-white p-4 shadow-sm">
@@ -644,39 +735,30 @@ export default function EditSwimmerProfilePage() {
             />
             <p className="mt-0.5 text-right text-xs text-gray-400">{form.sensory_details.length}/500</p>
           </div>
-          <div>
-            <label className="mb-1 block text-xs text-gray-500">Noise Sensitivity (0–10)</label>
-            <input
-              type="number"
-              value={form.noise_sensitivity}
-              onChange={(e) => setForm((prev) => ({ ...prev, noise_sensitivity: sanitizeNumber(e.target.value) }))}
-              min={0}
-              max={10}
-              className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-700 focus:border-teal-400 focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs text-gray-500">Touch Tolerance (0–10)</label>
-            <input
-              type="number"
-              value={form.touch_tolerance}
-              onChange={(e) => setForm((prev) => ({ ...prev, touch_tolerance: sanitizeNumber(e.target.value) }))}
-              min={0}
-              max={10}
-              className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-700 focus:border-teal-400 focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs text-gray-500">Transition Difficulty (0–10)</label>
-            <input
-              type="number"
-              value={form.transition_difficulty}
-              onChange={(e) => setForm((prev) => ({ ...prev, transition_difficulty: sanitizeNumber(e.target.value) }))}
-              min={0}
-              max={10}
-              className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-700 focus:border-teal-400 focus:outline-none"
-            />
-          </div>
+          <ScaleSelect
+            name="noise_sensitivity"
+            label="Noise Sensitivity (0–10)"
+            value={form.noise_sensitivity}
+            onChange={(next) => setForm((prev) => ({ ...prev, noise_sensitivity: next }))}
+            lowLabel="not sensitive"
+            highLabel="very sensitive"
+          />
+          <ScaleSelect
+            name="touch_tolerance"
+            label="Touch Tolerance (0–10)"
+            value={form.touch_tolerance}
+            onChange={(next) => setForm((prev) => ({ ...prev, touch_tolerance: next }))}
+            lowLabel="avoids touch"
+            highLabel="comfortable"
+          />
+          <ScaleSelect
+            name="transition_difficulty"
+            label="Transition Difficulty (0–10)"
+            value={form.transition_difficulty}
+            onChange={(next) => setForm((prev) => ({ ...prev, transition_difficulty: next }))}
+            lowLabel="transitions easily"
+            highLabel="finds them hard"
+          />
         </div>
 
         {/* Communication & Triggers */}
@@ -742,11 +824,10 @@ export default function EditSwimmerProfilePage() {
           </p>
 
           {coachRequest && (
-            <div className={`mb-4 rounded-lg px-4 py-3 text-sm ${
-              coachRequest.status === "pending" ? "bg-amber-50 text-amber-700" :
-              coachRequest.status === "approved" ? "bg-teal-50 text-teal-700" :
-              "bg-red-50 text-red-600"
-            }`}>
+            <div className={`mb-4 rounded-lg px-4 py-3 text-sm ${coachRequest.status === "pending" ? "bg-amber-50 text-amber-700" :
+                coachRequest.status === "approved" ? "bg-teal-50 text-teal-700" :
+                  "bg-red-50 text-red-600"
+              }`}>
               {coachRequest.status === "pending" && "Your application is pending review by the admin."}
               {coachRequest.status === "approved" && "Your application has been approved!"}
               {coachRequest.status === "rejected" && "Your application was not approved. You may update and resubmit."}
@@ -910,18 +991,6 @@ export default function EditSwimmerProfilePage() {
             {saving ? "Saving..." : "Save Profile"}
           </button>
         </div>
-
-        <button
-          type="button"
-          onClick={async () => {
-            const supabase = createClient();
-            await supabase.auth.signOut();
-            router.push("/login");
-          }}
-          className="mt-4 w-full rounded-lg border border-red-200 py-3 text-sm font-medium text-red-600 hover:bg-red-50 transition"
-        >
-          Log Out
-        </button>
       </form>
     </div>
   );

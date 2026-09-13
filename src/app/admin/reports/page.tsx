@@ -723,7 +723,7 @@ export default function GenerateReportsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen page-shell bg-gray-50">
       <AdminHeader />
       <div id="main-content" tabIndex={-1} className="p-6">
         <h1 className="text-xl font-bold text-gray-800">Generate Reports</h1>
@@ -769,7 +769,7 @@ export default function GenerateReportsPage() {
         {/* Date Range */}
         <div className="mb-6 rounded-xl bg-white p-4 shadow-sm">
           <h2 className="mb-3 text-sm font-medium text-gray-700">&#128197; Date Range (Optional)</h2>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-xs text-gray-500">Start Date</label>
               <input
@@ -794,7 +794,7 @@ export default function GenerateReportsPage() {
         {/* Export Format */}
         <div className="mb-8 rounded-xl bg-white p-4 shadow-sm">
           <h2 className="mb-3 text-sm font-medium text-gray-700">Export Format</h2>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             {([
               { key: "pdf" as ExportFormat, label: "PDF", desc: "Print-ready", icon: "&#128196;" },
               { key: "word" as ExportFormat, label: "Word", desc: "Editable", icon: "&#128221;" },

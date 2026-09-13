@@ -282,14 +282,14 @@ export default function AdminNotificationsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen page-shell bg-gray-50 flex items-center justify-center">
         <p className="text-sm text-gray-500">Loading notifications...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen page-shell bg-gray-50">
       <AdminHeader />
       <div className="p-6">
         {/* Header */}

@@ -19,6 +19,7 @@ interface Student {
 interface SkillProgress {
   id: string;
   category: string;
+  skill_group: string | null;
   skill_name: string;
   status: SkillStatus;
 }
@@ -68,7 +69,7 @@ interface TierUpgrade {
   currentStage: number;
   nextTier: string;
   nextStage: number;
-  newSkills: { category: string; skill_name: string }[];
+  newSkills: { category: string; skill_group: string | null; skill_name: string }[];
 }
 
 // Tier progression map
@@ -86,17 +87,39 @@ const TIER_PROGRESSION: Record<string, { tier: string; stage: number } | null> =
   "Advance-3": null,
 };
 
+// The three columns of the LTS rubric, in the order they appear on the sheet.
+// Anything else sorts after them rather than being dropped.
+const CATEGORY_ORDER = ["Water Safety", "Water Confident", "Water Skills"];
+
 function groupSkillsByCategory(skills: SkillProgress[]) {
-  const map: Record<string, SkillProgress[]> = {};
+  const byCategory = new Map<string, Map<string, SkillProgress[]>>();
   for (const skill of skills) {
-    if (!map[skill.category]) map[skill.category] = [];
-    map[skill.category].push(skill);
+    // Progress rows predating the rubric have no skill_group.
+    const group = skill.skill_group ?? "Other";
+    if (!byCategory.has(skill.category)) byCategory.set(skill.category, new Map());
+    const groups = byCategory.get(skill.category)!;
+    if (!groups.has(group)) groups.set(group, []);
+    groups.get(group)!.push(skill);
   }
-  return Object.entries(map).map(([category, skills]) => {
-    const mastered = skills.filter((s) => s.status === "mastered").length;
-    const progress = skills.length > 0 ? Math.round((mastered / skills.length) * 100) : 0;
-    return { category, skills, progress };
-  });
+
+  const rank = (c: string) => {
+    const i = CATEGORY_ORDER.indexOf(c);
+    return i === -1 ? CATEGORY_ORDER.length : i;
+  };
+
+  return [...byCategory.entries()]
+    .sort(([a], [b]) => rank(a) - rank(b))
+    .map(([category, groupMap]) => {
+      const all = [...groupMap.values()].flat();
+      const mastered = all.filter((s) => s.status === "mastered").length;
+      return {
+        category,
+        mastered,
+        total: all.length,
+        progress: all.length > 0 ? Math.round((mastered / all.length) * 100) : 0,
+        groups: [...groupMap.entries()].map(([name, groupSkills]) => ({ name, skills: groupSkills })),
+      };
+    });
 }
 
 function formatDate(dateStr: string) {
@@ -146,27 +169,41 @@ function ProgressTab({
     <div className="space-y-6">
       {categories.map((cat) => (
         <div key={cat.category} className="rounded-xl bg-white p-4 shadow-sm">
-          <div className="mb-1 flex items-center justify-between">
+          <div className="mb-1 flex items-center justify-between gap-3">
             <h3 className="font-semibold text-gray-800">{cat.category}</h3>
-            <span className="text-sm font-medium text-gray-600">{cat.progress}%</span>
+            <span className="text-sm font-medium text-gray-600">
+              {cat.mastered}/{cat.total} mastered
+            </span>
           </div>
           <div className="mb-4 h-2 w-full rounded-full bg-gray-100">
             <div className="h-2 rounded-full bg-teal-400" style={{ width: `${cat.progress}%` }} />
           </div>
-          <div className="space-y-3">
-            {cat.skills.map((skill) => (
-              <div key={skill.id} className="flex items-center justify-between gap-3">
-                <span className="text-sm text-gray-700 flex-1">{skill.skill_name}</span>
-                <select
-                  value={skill.status}
-                  disabled={updating === skill.id}
-                  onChange={(e) => onUpdateSkill(skill.id, e.target.value as SkillStatus)}
-                  className={`rounded-full px-2.5 py-1 text-xs font-medium border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-teal-400 ${statusColor(skill.status)} ${updating === skill.id ? "opacity-50" : ""}`}
-                >
-                  <option value="not_started">Not Started</option>
-                  <option value="emerging">Emerging</option>
-                  <option value="mastered">Mastered</option>
-                </select>
+
+          {/* Skill groups, as named on the rubric sheet. */}
+          <div className="space-y-4">
+            {cat.groups.map((group) => (
+              <div key={group.name}>
+                <h4 className="mb-2 border-b border-gray-100 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                  {group.name}
+                </h4>
+                <div className="space-y-2">
+                  {group.skills.map((skill) => (
+                    <div key={skill.id} className="flex items-start justify-between gap-3">
+                      <span className="flex-1 text-sm text-gray-700">{skill.skill_name}</span>
+                      <select
+                        value={skill.status}
+                        disabled={updating === skill.id}
+                        aria-label={`${skill.skill_name} status`}
+                        onChange={(e) => onUpdateSkill(skill.id, e.target.value as SkillStatus)}
+                        className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-teal-400 ${statusColor(skill.status)} ${updating === skill.id ? "opacity-50" : ""}`}
+                      >
+                        <option value="not_started">Not Started</option>
+                        <option value="emerging">Emerging</option>
+                        <option value="mastered">Mastered</option>
+                      </select>
+                    </div>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
@@ -408,7 +445,7 @@ export default function StudentProfilePage() {
 
       const { data: skillsData } = await supabase
         .from("skill_progress")
-        .select("id, category, skill_name, status")
+        .select("id, category, skill_group, skill_name, status")
         .eq("swimmer_id", studentId);
 
       setSkills(skillsData ?? []);
@@ -472,7 +509,7 @@ export default function StudentProfilePage() {
     // Fetch next tier skills from curriculum
     const { data: nextSkills } = await supabase
       .from("swim_curriculum")
-      .select("category, skill_name")
+      .select("category, skill_group, skill_name")
       .eq("tier", next.tier)
       .eq("stage", next.stage)
       .order("order_index");
@@ -542,6 +579,7 @@ export default function StudentProfilePage() {
       const newSkillRows = tierUpgrade.newSkills.map((s) => ({
         swimmer_id: studentId,
         category: s.category,
+        skill_group: s.skill_group,
         skill_name: s.skill_name,
         status: "not_started" as SkillStatus,
         updated_by: user?.id,
@@ -604,7 +642,7 @@ export default function StudentProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen page-shell bg-gray-50 flex items-center justify-center">
         <p className="text-sm text-gray-500">Loading student profile...</p>
       </div>
     );
@@ -612,14 +650,14 @@ export default function StudentProfilePage() {
 
   if (error || !student) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen page-shell bg-gray-50 flex items-center justify-center">
         <p className="text-sm text-red-500">{error ?? "Student not found."}</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen page-shell bg-gray-50 p-6">
       {/* Tier Upgrade Modal */}
       {tierUpgrade && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4">

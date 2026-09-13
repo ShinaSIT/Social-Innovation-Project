@@ -108,13 +108,14 @@ export default function SwimmerDashboardPage() {
 
       if (profileError) throw new Error("Failed to load swimmer profile.");
 
-      const { data: swimmerData, error: swimmerError } = await supabase
+      // maybeSingle, and no throw: a swimmer who registered for themselves and
+      // has not filled in their profile yet has no swimmers row. That should
+      // render as an empty dashboard, not an error screen.
+      const { data: swimmerData } = await supabase
         .from("swimmers")
         .select("age, category, progress")
         .eq("id", swimmerId)
-        .single();
-
-      if (swimmerError) throw new Error("Failed to load swimmer data.");
+        .maybeSingle();
 
       setSwimmer({
         id: swimmerId,
@@ -269,7 +270,7 @@ export default function SwimmerDashboardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen page-shell bg-gray-50 flex items-center justify-center">
         <p className="text-sm text-gray-500">Loading dashboard...</p>
       </div>
     );
@@ -277,14 +278,14 @@ export default function SwimmerDashboardPage() {
 
   if (error || !swimmer) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen page-shell bg-gray-50 flex items-center justify-center">
         <p className="text-sm text-red-500">{error ?? "Could not load dashboard."}</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen page-shell bg-gray-50">
       <SwimmerHeader />
 
       {/* Header with gradient */}

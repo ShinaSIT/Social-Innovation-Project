@@ -31,12 +31,15 @@ export default function AddStudentPage() {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
-    // Get coach's club_id (may be null for independent)
-    const { data: coachProfile } = await supabase
-      .from("profiles")
-      .select("club_id")
-      .eq("id", user!.id)
-      .single();
+    // Get coach's club_id (may be null for independent). A club coach's club
+    // can live on coaches.club_id rather than profiles.club_id, so resolve it
+    // the same way the student list does (see ../page.tsx).
+    const [{ data: coachProfile }, { data: coachRow }] = await Promise.all([
+      supabase.from("profiles").select("club_id").eq("id", user!.id).single(),
+      supabase.from("coaches").select("club_id").eq("id", user!.id).single(),
+    ]);
+
+    const clubId = coachProfile?.club_id ?? coachRow?.club_id ?? null;
 
     // 1. Create auth user for swimmer — in practice this would be an invite
     // For independent coaches, we create a profile entry directly
@@ -51,7 +54,7 @@ export default function AddStudentPage() {
         id: swimmerId,
         role: "swimmer",
         full_name: fullName,
-        club_id: coachProfile?.club_id ?? null,
+        club_id: clubId,
       });
 
     if (profileError) {
@@ -66,7 +69,7 @@ export default function AddStudentPage() {
       age: age ? parseInt(age) : null,
       level: level ? parseInt(level) : null,
       category,
-      club_id: coachProfile?.club_id ?? null,
+      club_id: clubId,
     });
 
     // 4. Insert swimmer_profile (sensory/conditions)
@@ -90,7 +93,7 @@ export default function AddStudentPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 pb-12">
+    <div className="min-h-screen page-shell-narrow bg-gray-50 p-6 pb-12">
       <div className="mb-6 flex items-center gap-2">
         <Link href="/coach/students" className="text-gray-400 hover:text-gray-600">&larr;</Link>
         <h1 className="text-xl font-bold text-gray-800">Add Student</h1>
@@ -109,7 +112,7 @@ export default function AddStudentPage() {
               className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm focus:border-teal-400 focus:outline-none"
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-sm text-gray-600">Age</label>
               <input

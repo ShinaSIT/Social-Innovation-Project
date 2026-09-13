@@ -217,7 +217,7 @@ export default function TermScheduleForm({
         </p>
       )}
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <label className="mb-1 block text-sm text-gray-600">
             Term Name * {!termNameCustomized && startDate && endDate && (
@@ -246,7 +246,7 @@ export default function TermScheduleForm({
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div>
           <label className="mb-1 block text-sm text-gray-600">Day Pattern</label>
           <select

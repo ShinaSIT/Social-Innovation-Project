@@ -1,1 +1,43 @@
 @import "tailwindcss";
+
+@layer components {
+  /* Page shell: centers a page's content without breaking full-bleed chrome.
+     Applied to a page's outermost wrapper. Every direct child is constrained
+     and centered, which keeps each section's cards aligned on one column
+     while the wrapper's background still spans the whole viewport.
+
+     Excluded, deliberately:
+       nav, a        -- the header bar and its skip-to-content link are
+                        full-bleed by design; the header centers its own
+                        contents internally so it still lines up with the page.
+       .fixed,
+       .absolute     -- overlays such as NotificationPopup, which position
+                        themselves against the viewport. Clamping their width
+                        would shrink a modal's backdrop on wide screens.
+
+     The :not(.flex) on the shell itself skips wrappers that already centre
+     their own content (the "Loading dashboard..." and error states, which are
+     `flex items-center justify-center`). Those centre a content-sized child;
+     forcing width:100% on it would stretch it to the full column and strand
+     the text at the left edge.
+
+     Use exactly one of these two on a page wrapper. */
+  .page-shell:not(.flex) > :not(nav):not(a):not(.fixed):not(.absolute) {
+    margin-inline: auto;
+    width: 100%;
+    max-width: 64rem; /* 1024px -- dashboards, lists, tables, calendars */
+  }
+
+  .page-shell-narrow:not(.flex) > :not(nav):not(a):not(.fixed):not(.absolute) {
+    margin-inline: auto;
+    width: 100%;
+    max-width: 48rem; /* 768px -- forms and reading-heavy pages */
+  }
+}
+
+/* The nav is `sticky top-0`, so anything scrolled to by an anchor or by the
+   skip-to-content link would otherwise come to rest underneath it. Applies to
+   every page's #main-content target from one place. */
+#main-content {
+  scroll-margin-top: 5rem;
+}

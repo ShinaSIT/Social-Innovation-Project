@@ -99,7 +99,7 @@ export default function CertificationPage() {
   const banner = statusBanner[submitted ? "pending" : status];
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 pb-12">
+    <div className="min-h-screen page-shell-narrow bg-gray-50 p-6 pb-12">
       <div className="mb-6 flex items-center gap-2">
         <Link href="/coach/students" className="text-gray-400 hover:text-gray-600">&larr;</Link>
         <h1 className="text-xl font-bold text-gray-800">Coaching Certification</h1>

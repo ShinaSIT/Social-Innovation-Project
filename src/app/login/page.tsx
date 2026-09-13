@@ -12,6 +12,34 @@ function sanitize(value: string, maxLength = 200): string {
     .slice(0, maxLength);
 }
 
+// The single field that decides whether a swimmer's profile counts as filled
+// in. Row existence is not enough: every field on the profile form is optional,
+// so saving a blank form creates an all-null row that would otherwise read as
+// "done" and dismiss the prompt forever. Change this if the form grows a better
+// signal of completeness.
+const PROFILE_COMPLETE_FIELD = "date_of_birth";
+
+// Send a swimmer whose profile is not filled in to the form rather than the
+// dashboard. Deliberately non-fatal: if the lookup fails for any reason we fall
+// through to the dashboard rather than block a login that already succeeded.
+async function swimmerDestination(
+  supabase: ReturnType<typeof createClient>,
+  userId: string
+): Promise<string> {
+  const { data, error } = await supabase
+    .from("swimmer_personal_details")
+    .select(PROFILE_COMPLETE_FIELD)
+    .eq("swimmer_id", userId)
+    .maybeSingle();
+
+  if (error) return "/swimmer/dashboard";
+
+  const complete = Boolean(
+    data?.[PROFILE_COMPLETE_FIELD as keyof typeof data]
+  );
+  return complete ? "/swimmer/dashboard" : "/swimmer/profile/edit?welcome=1";
+}
+
 export default function LoginPage() {
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
@@ -47,14 +75,20 @@ export default function LoginPage() {
       .single();
 
     if (profileError || !profile) {
-      setError("Could not fetch user role.");
+      console.error("Profile lookup failed:", profileError);
+      setError(
+        profileError
+          ? `Could not fetch user role: ${profileError.message}`
+          : "Could not fetch user role: no profile found for this account."
+      );
       setLoading(false);
       return;
     }
 
     // Redirect based on role
     if (profile.role === "coach") window.location.href = "/coach/dashboard";
-    else if (profile.role === "swimmer") window.location.href = "/swimmer/dashboard";
+    else if (profile.role === "swimmer")
+      window.location.href = await swimmerDestination(supabase, data.user.id);
     else if (profile.role === "admin") window.location.href = "/admin/dashboard";
     else {
       setError("Unknown account role.");
@@ -106,7 +140,20 @@ export default function LoginPage() {
       return;
     }
 
-    setSuccess("Account created successfully! You can now log in.");
+    // When email confirmation is disabled in Supabase, signUp returns a
+    // session and we can drop the new swimmer straight into the profile form.
+    // When it is enabled there is no session yet -- the middleware would bounce
+    // them back to /login -- so they confirm first and handleLogin routes them
+    // to the same form on their first sign-in. Leave `loading` set so the
+    // button stays disabled through the navigation.
+    if (data.session) {
+      window.location.href = "/swimmer/profile/edit?welcome=1";
+      return;
+    }
+
+    setSuccess(
+      "Account created. Check your email to confirm your address, then log in to finish setting up your profile."
+    );
     setMode("login");
     setPassword("");
     setConfirmPassword("");
