@@ -29,7 +29,7 @@ export default function AdminHeader() {
       </a>
       <nav
         aria-label="Admin navigation"
-        className="mb-6 border-b border-gray-200 bg-white"
+        className="sticky top-0 z-40 mb-6 border-b border-gray-200 bg-white"
       >
         <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-y-2 px-4 py-3 sm:px-6">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">

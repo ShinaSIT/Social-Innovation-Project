@@ -34,3 +34,10 @@
     max-width: 48rem; /* 768px -- forms and reading-heavy pages */
   }
 }
+
+/* The nav is `sticky top-0`, so anything scrolled to by an anchor or by the
+   skip-to-content link would otherwise come to rest underneath it. Applies to
+   every page's #main-content target from one place. */
+#main-content {
+  scroll-margin-top: 5rem;
+}

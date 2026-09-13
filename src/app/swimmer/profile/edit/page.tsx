@@ -991,18 +991,6 @@ export default function EditSwimmerProfilePage() {
             {saving ? "Saving..." : "Save Profile"}
           </button>
         </div>
-
-        <button
-          type="button"
-          onClick={async () => {
-            const supabase = createClient();
-            await supabase.auth.signOut();
-            router.push("/login");
-          }}
-          className="mt-4 w-full rounded-lg border border-red-200 py-3 text-sm font-medium text-red-600 hover:bg-red-50 transition"
-        >
-          Log Out
-        </button>
       </form>
     </div>
   );

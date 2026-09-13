@@ -4,10 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import NotificationBell from "@/app/components/NotificationBell";
 import NotificationPopup from "@/app/components/NotificationPopup";
+import UserMenu from "@/app/components/UserMenu";
 
+// Profile lives in the right-hand group beside the notification bell, so it is
+// deliberately not repeated here.
 const navItems = [
   { href: "/swimmer/dashboard", label: "Dashboard", icon: "\u{1F3E0}" },
-  { href: "/swimmer/profile/edit", label: "Profile", icon: "\u{1F464}" },
 ];
 
 export default function SwimmerHeader() {
@@ -24,7 +26,7 @@ export default function SwimmerHeader() {
       </a>
       <nav
         aria-label="Swimmer navigation"
-        className="mb-6 border-b border-gray-200 bg-white"
+        className="sticky top-0 z-40 mb-6 border-b border-gray-200 bg-white"
       >
         <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-y-2 px-4 py-3 sm:px-6">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
@@ -46,15 +48,10 @@ export default function SwimmerHeader() {
           </div>
           <div className="flex items-center gap-3">
             <NotificationBell />
-            <Link
-              href="/swimmer/profile/edit"
-              aria-current={pathname.startsWith("/swimmer/profile") ? "page" : undefined}
-              className={`flex items-center gap-1 text-sm ${
-                pathname.startsWith("/swimmer/profile") ? "text-teal-600 font-medium" : "text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              <span aria-hidden="true">{"\u{1F464}"}</span> Profile
-            </Link>
+            <UserMenu
+              profileHref="/swimmer/profile/edit"
+              isActive={pathname.startsWith("/swimmer/profile")}
+            />
           </div>
         </div>
       </nav>

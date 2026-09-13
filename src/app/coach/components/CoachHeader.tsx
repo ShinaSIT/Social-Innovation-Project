@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import NotificationBell from "@/app/components/NotificationBell";
 import NotificationPopup from "@/app/components/NotificationPopup";
+import UserMenu from "@/app/components/UserMenu";
 
 const navItems = [
   { href: "/coach/dashboard", label: "Dashboard", icon: "\u{1F3E0}" },
@@ -26,7 +27,7 @@ export default function CoachHeader() {
       </a>
       <nav
         aria-label="Coach navigation"
-        className="mb-6 border-b border-gray-200 bg-white"
+        className="sticky top-0 z-40 mb-6 border-b border-gray-200 bg-white"
       >
         <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-y-2 px-4 py-3 sm:px-6">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
@@ -48,15 +49,10 @@ export default function CoachHeader() {
           </div>
           <div className="flex items-center gap-3">
             <NotificationBell />
-            <Link
-              href="/coach/profile"
-              aria-current={pathname === "/coach/profile" ? "page" : undefined}
-              className={`flex items-center gap-1 text-sm ${
-                pathname === "/coach/profile" ? "text-teal-600 font-medium" : "text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              <span aria-hidden="true">{"\u{1F464}"}</span> Profile
-            </Link>
+            <UserMenu
+              profileHref="/coach/profile"
+              isActive={pathname === "/coach/profile"}
+            />
           </div>
         </div>
       </nav>
