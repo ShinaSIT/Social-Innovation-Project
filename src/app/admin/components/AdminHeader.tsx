@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { createClient } from "@/utils/supabase/client";
 import NotificationBell from "@/app/components/NotificationBell";
 import NotificationPopup from "@/app/components/NotificationPopup";
 
@@ -18,6 +20,16 @@ const navItems = [
 
 export default function AdminHeader() {
   const pathname = usePathname();
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    // A full navigation rather than router.push: it drops any client-side
+    // state held by the page we are leaving.
+    window.location.href = "/login";
+  };
 
   return (
     <>
@@ -56,6 +68,14 @@ export default function AdminHeader() {
           </div>
           <div className="flex items-center gap-3">
             <NotificationBell />
+            <button
+              type="button"
+              onClick={handleLogout}
+              disabled={loggingOut}
+              className="text-sm text-gray-500 hover:text-red-600 disabled:opacity-60"
+            >
+              {loggingOut ? "Logging out..." : "Log out"}
+            </button>
           </div>
         </div>
       </nav>

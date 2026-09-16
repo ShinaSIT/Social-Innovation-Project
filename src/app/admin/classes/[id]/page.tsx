@@ -6,7 +6,7 @@ import { useParams } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import AdminHeader from "@/app/admin/components/AdminHeader";
 import TermScheduleTable from "@/app/admin/components/TermScheduleTable";
-import { DAYS, TermSchedule, formatTime, formatDateShort } from "@/utils/termSchedule";
+import { DAYS, TermSchedule, formatTime } from "@/utils/termSchedule";
 
 interface ClassInfo {
   id: string;
@@ -309,7 +309,42 @@ export default function ClassDetailPage() {
 
   const handleSetClassification = async (swimmerId: string, classification: Classification) => {
     const supabase = createClient();
-    await supabase.from("swimmers").update({ classification }).eq("id", swimmerId);
+    const { data: updated, error: updateError } = await supabase
+      .from("swimmers")
+      .update({ classification })
+      .eq("id", swimmerId)
+      .select("id");
+    if (updateError) {
+      window.alert("Couldn't update classification: " + updateError.message);
+      return;
+    }
+    if (!updated || updated.length === 0) {
+      window.alert(
+        "The update ran but changed nothing — you likely don't have permission to edit this swimmer's classification (a database permissions rule is silently blocking it)."
+      );
+      return;
+    }
+    await loadData();
+  };
+
+  const handleSetEnrolledAt = async (groupId: string, swimmerId: string, dateStr: string) => {
+    const supabase = createClient();
+    const { data: updated, error: updateError } = await supabase
+      .from("class_group_swimmers")
+      .update({ enrolled_at: dateStr })
+      .eq("group_id", groupId)
+      .eq("swimmer_id", swimmerId)
+      .select("group_id");
+    if (updateError) {
+      window.alert("Couldn't update joined date: " + updateError.message);
+      return;
+    }
+    if (!updated || updated.length === 0) {
+      window.alert(
+        "The update ran but changed nothing — you likely don't have permission to edit this (a database permissions rule is silently blocking it)."
+      );
+      return;
+    }
     await loadData();
   };
 
@@ -549,13 +584,23 @@ export default function ClassDetailPage() {
                       {g.swimmers.map((s) => (
                         <div key={s.id} className="rounded-lg bg-gray-50 px-3 py-2 text-sm">
                           <div className="flex items-center justify-between gap-2">
-                            <div>
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                               <span className="font-medium text-gray-700">{s.name}</span>
-                              <span className="ml-2 text-xs text-gray-500">
+                              <span className="text-xs text-gray-500">
                                 {s.level ? `Level ${s.level}` : "Not yet assessed"}
                               </span>
-                              <span className="ml-2 text-xs text-gray-400">
-                                Joined {formatDateShort(s.enrolled_at.slice(0, 10))}
+                              <span className="flex items-center gap-1 text-xs text-gray-400">
+                                Joined this class:
+                                <input
+                                  key={s.enrolled_at.slice(0, 10)}
+                                  type="date"
+                                  defaultValue={s.enrolled_at.slice(0, 10)}
+                                  onBlur={(e) => {
+                                    if (!e.target.value || e.target.value === s.enrolled_at.slice(0, 10)) return;
+                                    handleSetEnrolledAt(g.id, s.id, e.target.value);
+                                  }}
+                                  className="rounded border border-gray-200 bg-white px-1 py-0.5 text-xs text-gray-600"
+                                />
                               </span>
                             </div>
                             <button
