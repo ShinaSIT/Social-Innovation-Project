@@ -51,6 +51,15 @@ interface Coach {
   isAssigned: boolean;
 }
 
+interface SubNeeded {
+  groupId: string;
+  lessonDate: string;
+  className: string;
+  groupName: string;
+  coachName: string;
+  absenceReason: string | null;
+}
+
 interface CoachRequest {
   id: string;
   swimmer_id: string;
@@ -102,6 +111,7 @@ export default function AdminDashboardPage() {
   const [assignSuccess, setAssignSuccess] = useState<string | null>(null);
   const [loadingAssignData, setLoadingAssignData] = useState(false);
   const [atRiskPage, setAtRiskPage] = useState(1);
+  const [subsNeeded, setSubsNeeded] = useState<SubNeeded[]>([]);
 
   const [coachRequests, setCoachRequests] = useState<CoachRequest[]>([]);
   const [promotingId, setPromotingId] = useState<string | null>(null);
@@ -346,6 +356,79 @@ export default function AdminDashboardPage() {
         setCoachRequests([]);
       }
 
+      // 14. Coach absences with no substitute arranged yet (today onward)
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const windowEnd = new Date();
+      windowEnd.setDate(windowEnd.getDate() + 14);
+      const windowEndStr = windowEnd.toISOString().slice(0, 10);
+
+      const { data: absenceRows } = await supabase
+        .from("class_coach_attendance")
+        .select("class_group_id, lesson_date, coach_id, absence_reason")
+        .eq("attended", false)
+        .gte("lesson_date", todayStr)
+        .lte("lesson_date", windowEndStr);
+
+      if (absenceRows && absenceRows.length > 0) {
+        const absentGroupIds = Array.from(new Set(absenceRows.map((a) => a.class_group_id)));
+
+        const { data: groupRows } = await supabase
+          .from("class_groups")
+          .select("id, class_id, group_name")
+          .in("id", absentGroupIds);
+
+        const classIdsForAbsence = Array.from(new Set((groupRows ?? []).map((g) => g.class_id)));
+        const { data: classRowsForAbsence } = await supabase
+          .from("classes")
+          .select("id, name, club_id")
+          .in("id", classIdsForAbsence.length ? classIdsForAbsence : ["00000000-0000-0000-0000-000000000000"])
+          .eq("club_id", cId);
+
+        const classInfoMap = new Map((classRowsForAbsence ?? []).map((c) => [c.id, c]));
+        const groupInfoMap = new Map((groupRows ?? []).map((g) => [g.id, g]));
+
+        // Already-arranged substitutes: any override row for that group+date.
+        const { data: overrideRows } = await supabase
+          .from("class_session_coaches")
+          .select("class_group_id, lesson_date")
+          .in("class_group_id", absentGroupIds)
+          .gte("lesson_date", todayStr)
+          .lte("lesson_date", windowEndStr);
+
+        const coveredSet = new Set((overrideRows ?? []).map((o) => `${o.class_group_id}|${o.lesson_date}`));
+
+        const absentCoachIds = Array.from(new Set(absenceRows.map((a) => a.coach_id)));
+        const { data: absentCoachProfiles } = await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .in("id", absentCoachIds.length ? absentCoachIds : ["00000000-0000-0000-0000-000000000000"]);
+        const coachNameMap = new Map((absentCoachProfiles ?? []).map((p) => [p.id, p.full_name ?? "Unknown"]));
+
+        const needsSub: SubNeeded[] = absenceRows
+          .filter((a) => {
+            const group = groupInfoMap.get(a.class_group_id);
+            if (!group || !classInfoMap.has(group.class_id)) return false; // not this club
+            return !coveredSet.has(`${a.class_group_id}|${a.lesson_date}`);
+          })
+          .map((a) => {
+            const group = groupInfoMap.get(a.class_group_id)!;
+            const classInfo = classInfoMap.get(group.class_id)!;
+            return {
+              groupId: a.class_group_id,
+              lessonDate: a.lesson_date,
+              className: classInfo.name,
+              groupName: group.group_name,
+              coachName: coachNameMap.get(a.coach_id) ?? "Unknown",
+              absenceReason: a.absence_reason,
+            };
+          })
+          .sort((a, b) => a.lessonDate.localeCompare(b.lessonDate));
+
+        setSubsNeeded(needsSub);
+      } else {
+        setSubsNeeded([]);
+      }
+
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -580,6 +663,35 @@ export default function AdminDashboardPage() {
             <LogoutButton />
           </div>
         </div>
+
+        {/* Coach absences needing a substitute */}
+        {subsNeeded.length > 0 && (
+          <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 p-4">
+            <h2 className="mb-2 flex items-center gap-1 font-semibold text-amber-800">
+              <span aria-hidden="true">&#9888;&#65039;</span> {subsNeeded.length} class{subsNeeded.length === 1 ? "" : "es"} need{subsNeeded.length === 1 ? "s" : ""} a substitute coach
+            </h2>
+            <ul className="divide-y divide-amber-200">
+              {subsNeeded.map((s) => (
+                <li key={`${s.groupId}-${s.lessonDate}`} className="flex items-center justify-between gap-3 py-2 text-sm">
+                  <div>
+                    <span className="font-medium text-gray-800">{s.className}</span>
+                    <span className="text-gray-500"> ({s.groupName})</span>
+                    <span className="text-gray-500"> &middot; {new Date(s.lessonDate + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</span>
+                    <div className="text-xs text-gray-500">
+                      {s.coachName} marked not attending{s.absenceReason ? ` (${s.absenceReason === "cat1" ? "Cat 1" : s.absenceReason === "mc" ? "MC" : "Other"})` : ""}
+                    </div>
+                  </div>
+                  <Link
+                    href={`/admin/calendar?date=${s.lessonDate}`}
+                    className="shrink-0 rounded-lg border border-amber-400 px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-100 transition"
+                  >
+                    Arrange substitute
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* Stats Cards */}
         <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">

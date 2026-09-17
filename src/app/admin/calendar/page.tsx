@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import AdminHeader from "@/app/admin/components/AdminHeader";
 import { formatTime, toLocalISODate, DAYS, MONTH_NAMES } from "@/utils/termSchedule";
@@ -18,7 +19,17 @@ import {
 import ClassAttendanceCard from "@/app/admin/components/ClassAttendanceCard";
 
 export default function AdminCalendarPage() {
-  const [selectedDate, setSelectedDate] = useState(toLocalISODate(new Date()));
+  return (
+    <Suspense fallback={null}>
+      <AdminCalendarPageInner />
+    </Suspense>
+  );
+}
+
+function AdminCalendarPageInner() {
+  const searchParams = useSearchParams();
+  const dateParam = searchParams.get("date");
+  const [selectedDate, setSelectedDate] = useState(dateParam || toLocalISODate(new Date()));
   const [dayClasses, setDayClasses] = useState<DayClass[]>([]);
   const [allClubCoaches, setAllClubCoaches] = useState<{ id: string; name: string }[]>([]);
   const [coachFilter, setCoachFilter] = useState<string | null>(null);

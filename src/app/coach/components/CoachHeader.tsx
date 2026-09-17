@@ -8,6 +8,7 @@ import UserMenu from "@/app/components/UserMenu";
 
 const navItems = [
   { href: "/coach/dashboard", label: "Dashboard", icon: "\u{1F3E0}" },
+  { href: "/coach/calendar", label: "Calendar", icon: "\u{1F5D3}\u{FE0F}" },
   { href: "/coach/students", label: "Students", icon: "\u{1F465}" },
   { href: "/coach/toolkit", label: "Visual Toolkit", icon: "\u{1F5BC}" },
   { href: "/coach/training", label: "Training", icon: "\u{1F393}" },

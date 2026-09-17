@@ -13,6 +13,10 @@ interface ClassAttendanceCardProps {
   c: DayClass;
   dateStr: string;
   allowSubstitution?: boolean;
+  // Admin's List/Calendar views link the class name to its detail page;
+  // other roles (e.g. coach) don't have that page, so they pass false to
+  // render plain text instead.
+  linkToClass?: boolean;
   expandedGroups: Set<string>;
   toggleGroupExpanded: (groupId: string) => void;
   busyKey: string | null;
@@ -45,6 +49,7 @@ export default function ClassAttendanceCard({
   c,
   dateStr,
   allowSubstitution = true,
+  linkToClass = true,
   expandedGroups,
   toggleGroupExpanded,
   busyKey,
@@ -71,9 +76,13 @@ export default function ClassAttendanceCard({
   return (
     <div className="rounded-xl bg-white p-4 shadow-sm">
       <div className="mb-3">
-        <Link href={`/admin/classes/${c.id}`} className="font-semibold text-gray-800 hover:underline">
-          {c.name}
-        </Link>
+        {linkToClass ? (
+          <Link href={`/admin/classes/${c.id}`} className="font-semibold text-gray-800 hover:underline">
+            {c.name}
+          </Link>
+        ) : (
+          <span className="font-semibold text-gray-800">{c.name}</span>
+        )}
         <p className="text-xs text-gray-500">
           {formatTime(c.start_time)} &middot; {c.duration_minutes} min
           {c.location ? ` · ${c.location}` : ""}
