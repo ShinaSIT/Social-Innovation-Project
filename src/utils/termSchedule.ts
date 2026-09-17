@@ -38,6 +38,16 @@ export function formatTime(t: string) {
   return `${hour}:${String(m).padStart(2, "0")} ${period}`;
 }
 
+// "9:00 AM - 9:45 AM" from a start time + duration.
+export function formatTimeRange(startTime: string, durationMinutes: number) {
+  const [h, m] = startTime.split(":").map(Number);
+  const endTotalMinutes = h * 60 + m + durationMinutes;
+  const endTime = `${String(Math.floor(endTotalMinutes / 60) % 24).padStart(2, "0")}:${String(
+    endTotalMinutes % 60
+  ).padStart(2, "0")}`;
+  return `${formatTime(startTime)} - ${formatTime(endTime)}`;
+}
+
 export function formatDateShort(dateStr: string) {
   return new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", {
     month: "short",
