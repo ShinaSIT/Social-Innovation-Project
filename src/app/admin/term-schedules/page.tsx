@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/utils/supabase/client";
 import AdminHeader from "@/app/admin/components/AdminHeader";
+import ClassesStudentsTabs from "@/app/admin/components/ClassesStudentsTabs";
 import TermScheduleForm from "@/app/admin/components/TermScheduleForm";
 import TermScheduleTable from "@/app/admin/components/TermScheduleTable";
 import { TermSchedule, DAYS } from "@/utils/termSchedule";
@@ -164,6 +165,7 @@ export default function TermSchedulesPage() {
     <div className="min-h-screen page-shell bg-gray-50">
       <AdminHeader />
       <div id="main-content" tabIndex={-1} className="p-6">
+        <ClassesStudentsTabs />
         <div className="mb-4 flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-gray-800">Term Schedules</h1>

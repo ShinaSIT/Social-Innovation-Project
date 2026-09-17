@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
 import AdminHeader from "@/app/admin/components/AdminHeader";
+import ClassesStudentsTabs from "@/app/admin/components/ClassesStudentsTabs";
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -197,6 +198,7 @@ export default function AdminClassesPage() {
     <div className="min-h-screen page-shell bg-gray-50">
       <AdminHeader />
       <div id="main-content" tabIndex={-1} className="p-6">
+        <ClassesStudentsTabs />
         <div className="mb-4 flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-gray-800">Classes</h1>

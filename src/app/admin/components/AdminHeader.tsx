@@ -9,9 +9,16 @@ import NotificationPopup from "@/app/components/NotificationPopup";
 
 const navItems = [
   { href: "/admin/dashboard", label: "Dashboard", icon: "\u{1F4CA}" },
-  { href: "/admin/classes", label: "Classes", icon: "\u{1F465}" },
+  // Classes, Students, Coaches and Term Schedules share one top-level tab; a
+  // sub-tab row on each page (ClassesStudentsTabs) switches between them
+  // without leaving this section.
+  {
+    href: "/admin/classes",
+    label: "Classes",
+    icon: "\u{1F465}",
+    extraMatch: ["/admin/swimmers", "/admin/coaches", "/admin/term-schedules"],
+  },
   { href: "/admin/calendar", label: "Calendar", icon: "\u{1F5D3}\u{FE0F}" },
-  { href: "/admin/term-schedules", label: "Term Schedules", icon: "\u{1F4C5}" },
   { href: "/admin/reports", label: "Reports", icon: "\u{1F4C2}" },
   { href: "/admin/timetables", label: "Timetables", icon: "\u{1F4C4}" },
   { href: "/admin/toolkit", label: "Toolkit", icon: "\u{1F4E6}" },
@@ -51,7 +58,11 @@ export default function AdminHeader() {
             <span className="text-base font-bold tracking-tight text-gray-800 sm:text-lg">AquaBridge</span>
             <span className="hidden h-4 w-px bg-gray-200 sm:block" aria-hidden="true" />
             {navItems.map((item) => {
-              const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+              const extraMatch = "extraMatch" in item ? item.extraMatch : [];
+              const isActive =
+                pathname === item.href ||
+                pathname.startsWith(item.href + "/") ||
+                extraMatch.some((p) => pathname === p || pathname.startsWith(p + "/"));
               return (
                 <Link
                   key={item.href}
