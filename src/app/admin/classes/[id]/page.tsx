@@ -7,6 +7,11 @@ import { createClient } from "@/utils/supabase/client";
 import AdminHeader from "@/app/admin/components/AdminHeader";
 import TermScheduleTable from "@/app/admin/components/TermScheduleTable";
 import { DAYS, TermSchedule, formatTime } from "@/utils/termSchedule";
+import {
+  Classification,
+  CLASSIFICATION_LABELS,
+  CLASSIFICATION_STYLES,
+} from "@/utils/swimmerRequests";
 
 interface ClassInfo {
   id: string;
@@ -24,27 +29,11 @@ interface Person {
   name: string;
 }
 
-type Classification = "not_yet_assessed" | "normal" | "mild" | "severe";
-
 interface EnrolledSwimmer extends Person {
   level: number | null;
   enrolled_at: string;
   classification: Classification;
 }
-
-const CLASSIFICATION_LABELS: Record<Classification, string> = {
-  not_yet_assessed: "Not yet assessed",
-  normal: "Normal",
-  mild: "Mild",
-  severe: "Severe",
-};
-
-const CLASSIFICATION_STYLES: Record<Classification, string> = {
-  not_yet_assessed: "bg-gray-100 text-gray-500",
-  normal: "bg-blue-50 text-blue-700",
-  mild: "bg-amber-50 text-amber-700",
-  severe: "bg-red-50 text-red-700",
-};
 
 interface Group {
   id: string;
@@ -123,7 +112,6 @@ export default function ClassDetailPage() {
       const classificationMap = new Map(
         (clubSwimmerRows ?? []).map((s) => [s.id, (s.classification as Classification) ?? "not_yet_assessed"])
       );
-
       setAllClubCoaches(clubCoachIds.map((id) => ({ id, name: nameMap.get(id) ?? "Unknown" })));
       setAllClubSwimmers(
         clubSwimmerIds.map((id) => ({
@@ -305,26 +293,6 @@ export default function ClassDetailPage() {
     await supabase.from("class_group_swimmers").insert({ group_id: groupId, swimmer_id: swimmerId });
     await loadData();
     setGroupBusy(null);
-  };
-
-  const handleSetClassification = async (swimmerId: string, classification: Classification) => {
-    const supabase = createClient();
-    const { data: updated, error: updateError } = await supabase
-      .from("swimmers")
-      .update({ classification })
-      .eq("id", swimmerId)
-      .select("id");
-    if (updateError) {
-      window.alert("Couldn't update classification: " + updateError.message);
-      return;
-    }
-    if (!updated || updated.length === 0) {
-      window.alert(
-        "The update ran but changed nothing — you likely don't have permission to edit this swimmer's classification (a database permissions rule is silently blocking it)."
-      );
-      return;
-    }
-    await loadData();
   };
 
   const handleSetEnrolledAt = async (groupId: string, swimmerId: string, dateStr: string) => {
@@ -611,15 +579,6 @@ export default function ClassDetailPage() {
                               &times; Remove
                             </button>
                           </div>
-                          <select
-                            value={s.classification}
-                            onChange={(e) => handleSetClassification(s.id, e.target.value as Classification)}
-                            className={`mt-1.5 rounded-full border-0 px-2 py-0.5 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-teal-400 ${CLASSIFICATION_STYLES[s.classification]}`}
-                          >
-                            {(Object.keys(CLASSIFICATION_LABELS) as Classification[]).map((k) => (
-                              <option key={k} value={k}>{CLASSIFICATION_LABELS[k]}</option>
-                            ))}
-                          </select>
                         </div>
                       ))}
                     </div>
@@ -627,7 +586,7 @@ export default function ClassDetailPage() {
                   {availableSwimmers.length > 0 && (
                     <>
                       <div className="mb-1.5 flex flex-wrap items-center gap-2 text-[11px] text-gray-400">
-                        <span>Tinted by classification:</span>
+                        <span>Tinted by support needs:</span>
                         {(Object.keys(CLASSIFICATION_LABELS) as Classification[]).map((k) => (
                           <span key={k} className={`rounded-full px-1.5 py-0.5 ${CLASSIFICATION_STYLES[k]}`}>{CLASSIFICATION_LABELS[k]}</span>
                         ))}
