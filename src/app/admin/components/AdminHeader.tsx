@@ -58,7 +58,7 @@ export default function AdminHeader() {
             <span className="text-base font-bold tracking-tight text-gray-800 sm:text-lg">AquaBridge</span>
             <span className="hidden h-4 w-px bg-gray-200 sm:block" aria-hidden="true" />
             {navItems.map((item) => {
-              const extraMatch = "extraMatch" in item ? item.extraMatch : [];
+              const extraMatch = item.extraMatch ?? [];
               const isActive =
                 pathname === item.href ||
                 pathname.startsWith(item.href + "/") ||
