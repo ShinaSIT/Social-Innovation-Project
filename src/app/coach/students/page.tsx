@@ -174,13 +174,15 @@ export default function MyStudentsPage() {
         }
 
         // 8. Build pending updates list with swimmer names
-        const pending: PendingUpdate[] = Object.entries(unreflectedMap).map(([swimmerId, { sessionDate }]) => {
+        // Skip swimmers whose profile we couldn't load — their detail page would fail anyway
+        const pending: PendingUpdate[] = Object.entries(unreflectedMap).flatMap(([swimmerId, { sessionDate }]) => {
           const student = merged.find((s) => s.id === swimmerId);
-          return {
+          if (!student) return [];
+          return [{
             id: swimmerId,
-            name: student?.full_name ?? "Unknown",
+            name: student.full_name,
             sessionDate,
-          };
+          }];
         });
 
         setPendingUpdates(pending);

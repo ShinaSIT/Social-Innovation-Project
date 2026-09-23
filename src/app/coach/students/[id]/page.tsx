@@ -4,8 +4,14 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
+import { formatTime } from "@/utils/termSchedule";
+import { formatDateLong } from "@/utils/attendance";
+import { REFLECTION_QUESTIONS, reflectionOption, type ReflectionAnswers } from "@/utils/swimmerReflection";
 
-type Tab = "progress" | "reflections" | "sensory" | "milestones" | "personal";
+type Tab = "progress" | "reflections" | "self_reflections" | "sensory" | "milestones" | "personal";
+
+const TAB_KEYS: Tab[] = ["progress", "reflections", "self_reflections", "sensory", "milestones", "personal"];
+
 type SkillStatus = "not_started" | "emerging" | "mastered";
 
 interface Student {
@@ -30,6 +36,15 @@ interface Reflection {
   parent_feedback: string | null;
   mood: string | null;
   created_at: string;
+}
+
+// The swimmer's own emoji reflection on one class lesson.
+interface SelfReflection extends ReflectionAnswers {
+  id: string;
+  lesson_date: string;
+  className: string;
+  groupName: string;
+  startTime: string | null;
 }
 
 interface SensoryProfile {
@@ -257,6 +272,50 @@ function ReflectionsTab({ reflections, studentId }: { reflections: Reflection[];
   );
 }
 
+function SelfReflectionsTab({ reflections }: { reflections: SelfReflection[] }) {
+  if (reflections.length === 0) {
+    return (
+      <p className="text-sm text-gray-500 text-center py-8">
+        This swimmer hasn&apos;t reflected on any sessions yet.
+      </p>
+    );
+  }
+  return (
+    <div>
+      <p className="mb-3 text-xs text-gray-500">
+        How the swimmer felt about each session, in their own words. {reflections.length} reflection
+        {reflections.length === 1 ? "" : "s"}, newest first.
+      </p>
+      <div className="space-y-3">
+        {reflections.map((r) => (
+          <div key={r.id} className="rounded-xl bg-white p-4 shadow-sm">
+            <div className="mb-3">
+              <p className="text-sm font-medium text-gray-800">{formatDateLong(r.lesson_date)}</p>
+              <p className="text-xs text-gray-500">
+                {r.className}
+                {r.groupName ? ` (${r.groupName})` : ""}
+                {r.startTime ? ` · ${formatTime(r.startTime)}` : ""}
+              </p>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {REFLECTION_QUESTIONS.map((q) => {
+                const o = reflectionOption(q.key, r[q.key]);
+                return (
+                  <div key={q.key} className="rounded-lg bg-gray-50 px-2 py-2 text-center" title={q.question}>
+                    <p className="text-[11px] font-semibold uppercase text-gray-400">{q.shortLabel}</p>
+                    <p className="text-2xl leading-tight" aria-hidden="true">{o?.emoji ?? "–"}</p>
+                    <p className="text-xs text-gray-600">{o?.label ?? "—"}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function SensoryTab({ profile }: { profile: SensoryProfile | null }) {
   if (!profile) {
     return <p className="text-sm text-gray-500 text-center py-8">No sensory profile available.</p>;
@@ -406,6 +465,7 @@ export default function StudentProfilePage() {
   const [student, setStudent] = useState<Student | null>(null);
   const [skills, setSkills] = useState<SkillProgress[]>([]);
   const [reflections, setReflections] = useState<Reflection[]>([]);
+  const [selfReflections, setSelfReflections] = useState<SelfReflection[]>([]);
   const [sensoryProfile, setSensoryProfile] = useState<SensoryProfile | null>(null);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [personalDetails, setPersonalDetails] = useState<PersonalDetails | null>(null);
@@ -425,15 +485,16 @@ export default function StudentProfilePage() {
         .from("profiles")
         .select("id, full_name")
         .eq("id", studentId)
-        .single();
+        .maybeSingle();
 
       const { data: swimmerData, error: swimmerError } = await supabase
         .from("swimmers")
         .select("age, level, category")
         .eq("id", studentId)
-        .single();
+        .maybeSingle();
 
       if (profileError || swimmerError) throw new Error("Failed to load student.");
+      if (!profileData) throw new Error("Student profile not found or not accessible.");
 
       setStudent({
         id: profileData.id,
@@ -457,6 +518,49 @@ export default function StudentProfilePage() {
         .order("created_at", { ascending: false });
 
       setReflections(reflectionsData ?? []);
+
+      // The swimmer's own emoji reflections, with class names. Non-fatal: if
+      // this fails the tab just shows as empty.
+      const fallbackId = ["00000000-0000-0000-0000-000000000000"];
+      const { data: selfRows } = await supabase
+        .from("swimmer_session_reflections")
+        .select("id, class_group_id, lesson_date, feeling, difficulty, self_rating")
+        .eq("swimmer_id", studentId)
+        .order("lesson_date", { ascending: false });
+      const selfGroupIds = Array.from(new Set((selfRows ?? []).map((r) => r.class_group_id)));
+      const { data: selfGroupRows } = await supabase
+        .from("class_groups")
+        .select("id, class_id, group_name")
+        .in("id", selfGroupIds.length ? selfGroupIds : fallbackId);
+      const selfClassIds = Array.from(new Set((selfGroupRows ?? []).map((g) => g.class_id)));
+      const { data: selfClassRows } = await supabase
+        .from("classes")
+        .select("id, name, start_time")
+        .in("id", selfClassIds.length ? selfClassIds : fallbackId);
+      const selfGroupMap = new Map((selfGroupRows ?? []).map((g) => [g.id, g]));
+      const selfClassMap = new Map((selfClassRows ?? []).map((c) => [c.id, c]));
+
+      setSelfReflections(
+        (selfRows ?? [])
+          .map((r) => {
+            const group = selfGroupMap.get(r.class_group_id);
+            const cls = group ? selfClassMap.get(group.class_id) : undefined;
+            return {
+              id: r.id,
+              lesson_date: r.lesson_date,
+              className: cls?.name ?? "Class",
+              groupName: group?.group_name ?? "",
+              startTime: cls?.start_time ?? null,
+              feeling: r.feeling,
+              difficulty: r.difficulty,
+              self_rating: r.self_rating,
+            };
+          })
+          .sort(
+            (a, b) =>
+              b.lesson_date.localeCompare(a.lesson_date) || (b.startTime ?? "").localeCompare(a.startTime ?? "")
+          )
+      );
 
       const { data: sensoryData } = await supabase
         .from("swimmer_profiles")
@@ -492,6 +596,12 @@ export default function StudentProfilePage() {
   useEffect(() => {
     if (studentId) fetchAll();
   }, [studentId, fetchAll]);
+
+  // Open the tab named in ?tab= (e.g. the Students page's "Add Reflection" link).
+  useEffect(() => {
+    const tab = new URLSearchParams(window.location.search).get("tab");
+    if (tab && (TAB_KEYS as string[]).includes(tab)) setActiveTab(tab as Tab);
+  }, []);
 
   const checkTierUpgrade = async (updatedSkills: SkillProgress[], currentStudent: Student) => {
     const supabase = createClient();
@@ -635,6 +745,7 @@ export default function StudentProfilePage() {
   const tabs: { key: Tab; label: string }[] = [
     { key: "progress", label: "Progress" },
     { key: "reflections", label: "Reflections" },
+    { key: "self_reflections", label: "Self-Reflections" },
     { key: "sensory", label: "Sensory" },
     { key: "milestones", label: "Milestones" },
     { key: "personal", label: "Personal" },
@@ -774,6 +885,7 @@ export default function StudentProfilePage() {
         />
       )}
       {activeTab === "reflections" && <ReflectionsTab reflections={reflections} studentId={studentId} />}
+      {activeTab === "self_reflections" && <SelfReflectionsTab reflections={selfReflections} />}
       {activeTab === "sensory" && <SensoryTab profile={sensoryProfile} />}
       {activeTab === "milestones" && <MilestonesTab milestones={milestones} />}
       {activeTab === "personal" && <PersonalTab details={personalDetails} />}

@@ -77,9 +77,22 @@ export default function CoachProfilePage() {
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Set when arriving from the first-login set-password page (?welcome=1).
+  const [welcome, setWelcome] = useState(false);
+  const openedWelcomeEdit = useRef(false);
+
   useEffect(() => {
+    setWelcome(new URLSearchParams(window.location.search).get("welcome") === "1");
     fetchProfile();
   }, []);
+
+  // A newly invited coach goes straight into the edit form to fill in their details.
+  useEffect(() => {
+    if (welcome && profile && !openedWelcomeEdit.current) {
+      openedWelcomeEdit.current = true;
+      handleEditClick();
+    }
+  }, [welcome, profile]);
 
   const fetchProfile = async () => {
     const supabase = createClient();
@@ -294,6 +307,12 @@ export default function CoachProfilePage() {
           </button>
         )}
       </div>
+
+      {welcome && (
+        <div className="mb-6 rounded-lg bg-teal-50 px-4 py-3 text-sm text-teal-700">
+          Welcome to AquaBridge! Please fill in your details below.
+        </div>
+      )}
 
       {/* Avatar & Name */}
       <div className="mb-6 flex items-center gap-4">

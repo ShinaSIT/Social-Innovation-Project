@@ -60,17 +60,6 @@ interface SubNeeded {
   absenceReason: string | null;
 }
 
-interface CoachRequest {
-  id: string;
-  swimmer_id: string;
-  swimmer_name: string;
-  message: string | null;
-  qualifications: string | null;
-  experience: string | null;
-  certifications: string | null;
-  created_at: string;
-}
-
 function getLastSixMonths(): { label: string; year: number; month: number }[] {
   const months = [];
   const now = new Date();
@@ -97,7 +86,6 @@ export default function AdminDashboardPage() {
   const [levelDistribution, setLevelDistribution] = useState<LevelDistribution[]>([]);
   const [monthlyEnrollment, setMonthlyEnrollment] = useState<MonthlyEnrollment[]>([]);
   const [clubName, setClubName] = useState<string>("Club Overview");
-  const [clubId, setClubId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -112,11 +100,6 @@ export default function AdminDashboardPage() {
   const [loadingAssignData, setLoadingAssignData] = useState(false);
   const [atRiskPage, setAtRiskPage] = useState(1);
   const [subsNeeded, setSubsNeeded] = useState<SubNeeded[]>([]);
-
-  const [coachRequests, setCoachRequests] = useState<CoachRequest[]>([]);
-  const [promotingId, setPromotingId] = useState<string | null>(null);
-  const [selectedRequest, setSelectedRequest] = useState<CoachRequest | null>(null);
-  const [showRequestModal, setShowRequestModal] = useState(false);
 
   const modalRef = useRef<HTMLDivElement>(null);
   const closeAssignModal = useCallback(() => setShowAssignModal(false), []);
@@ -145,7 +128,6 @@ export default function AdminDashboardPage() {
       if (adminError) throw new Error("Failed to load admin profile.");
 
       const cId = adminProfile?.club_id;
-      setClubId(cId);
 
       // 2. Fetch club name
       if (cId) {
@@ -328,34 +310,6 @@ export default function AdminDashboardPage() {
         avgProgress,
       });
 
-      // 13. Fetch pending coach requests
-      const { data: requestsData } = await supabase
-        .from("coach_requests")
-        .select("id, swimmer_id, message, qualifications, experience, certifications, created_at")
-        .eq("status", "pending")
-        .order("created_at", { ascending: true });
-
-      const requesterIds = (requestsData ?? []).map((r) => r.swimmer_id);
-
-      if (requesterIds.length > 0) {
-        const { data: requesterProfiles } = await supabase
-          .from("profiles")
-          .select("id, full_name")
-          .in("id", requesterIds);
-
-        const nameMap: Record<string, string> = {};
-        for (const p of requesterProfiles ?? []) nameMap[p.id] = p.full_name ?? "Unknown";
-
-        setCoachRequests(
-          (requestsData ?? []).map((r) => ({
-            ...r,
-            swimmer_name: nameMap[r.swimmer_id] ?? "Unknown",
-          }))
-        );
-      } else {
-        setCoachRequests([]);
-      }
-
       // 14. Coach absences with no substitute arranged yet (today onward)
       const todayStr = new Date().toISOString().slice(0, 10);
       const windowEnd = new Date();
@@ -433,45 +387,6 @@ export default function AdminDashboardPage() {
       setError(err.message);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handlePromoteToCoach = async (request: CoachRequest) => {
-    setPromotingId(request.id);
-    const supabase = createClient();
-
-    try {
-      const { error: roleError } = await supabase.rpc("promote_to_coach", {
-        target_user_id: request.swimmer_id,
-      });
-
-      if (roleError) throw new Error("Failed to promote user: " + roleError.message);
-
-      const { error: coachError } = await supabase
-        .from("coaches")
-        .upsert({ id: request.swimmer_id, club_id: clubId ?? null, coach_type: "club", cert_status: "verified", });
-
-      if (coachError) throw new Error("Failed to create coach record.");
-
-      const { data: { user } } = await supabase.auth.getUser();
-      const { error: requestError } = await supabase
-        .from("coach_requests")
-        .update({
-          status: "approved",
-          reviewed_by: user?.id ?? null,
-          reviewed_at: new Date().toISOString(),
-        })
-        .eq("id", request.id);
-
-      if (requestError) throw new Error("Failed to update request status.");
-
-      setShowRequestModal(false);
-      setSelectedRequest(null);
-      await fetchDashboard();
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setPromotingId(null);
     }
   };
 
@@ -837,43 +752,6 @@ export default function AdminDashboardPage() {
           )}
         </div>
 
-        {/* Coach Applications Section */}
-        {coachRequests.length > 0 && (
-          <div className="mb-6 rounded-xl bg-white p-4 shadow-sm">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="font-semibold text-gray-800">&#127941; Coach Applications</h2>
-              <span className="rounded-full bg-amber-500 px-2 py-0.5 text-xs text-white">
-                {coachRequests.length} pending
-              </span>
-            </div>
-            <div className="space-y-3">
-              {coachRequests.map((request) => (
-                <div key={request.id} className="flex items-center justify-between rounded-lg border border-gray-100 px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-100 text-sm font-bold text-amber-700">
-                      {request.swimmer_name[0]}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-800">{request.swimmer_name}</p>
-                      <p className="text-xs text-gray-500">
-                        Applied {new Date(request.created_at).toLocaleDateString("en-US", {
-                          month: "short", day: "numeric", year: "numeric",
-                        })}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => { setSelectedRequest(request); setShowRequestModal(true); }}
-                    className="rounded-full border border-teal-300 px-3 py-1 text-xs text-teal-600 hover:bg-teal-50 transition"
-                  >
-                    Review
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Assign Modal */}
         {showAssignModal && (
           <div
@@ -970,71 +848,6 @@ export default function AdminDashboardPage() {
                   className="w-full rounded-full bg-teal-500 py-2.5 text-sm font-medium text-white hover:bg-teal-600 transition"
                 >
                   Done
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Request Review Modal */}
-        {showRequestModal && selectedRequest && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4">
-            <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
-              <div className="flex items-center justify-between border-b border-gray-100 p-4">
-                <h2 className="font-semibold text-gray-800">
-                  Coach Application — {selectedRequest.swimmer_name}
-                </h2>
-                <button
-                  onClick={() => { setShowRequestModal(false); setSelectedRequest(null); }}
-                  className="text-gray-400 hover:text-gray-600 text-xl"
-                >
-                  &times;
-                </button>
-              </div>
-
-              <div className="p-4 space-y-4 max-h-[60vh] overflow-y-auto">
-                <div>
-                  <p className="mb-1 text-xs font-medium text-gray-500">Qualifications</p>
-                  <p className="text-sm text-gray-700">{selectedRequest.qualifications ?? "—"}</p>
-                </div>
-                <div>
-                  <p className="mb-1 text-xs font-medium text-gray-500">Experience</p>
-                  <p className="text-sm text-gray-700">{selectedRequest.experience ?? "—"}</p>
-                </div>
-                <div>
-                  <p className="mb-1 text-xs font-medium text-gray-500">Certifications</p>
-                  <p className="text-sm text-gray-700">{selectedRequest.certifications ?? "—"}</p>
-                </div>
-                {selectedRequest.message && (
-                  <div>
-                    <p className="mb-1 text-xs font-medium text-gray-500">Additional Message</p>
-                    <p className="text-sm text-gray-700">{selectedRequest.message}</p>
-                  </div>
-                )}
-              </div>
-
-              <div className="border-t border-gray-100 p-4 flex gap-3">
-                <button
-                  onClick={async () => {
-                    const supabase = createClient();
-                    await supabase
-                      .from("coach_requests")
-                      .update({ status: "rejected", reviewed_at: new Date().toISOString() })
-                      .eq("id", selectedRequest.id);
-                    setShowRequestModal(false);
-                    setSelectedRequest(null);
-                    await fetchDashboard();
-                  }}
-                  className="flex-1 rounded-full border border-red-200 py-2.5 text-sm font-medium text-red-500 hover:bg-red-50 transition"
-                >
-                  Reject
-                </button>
-                <button
-                  onClick={() => handlePromoteToCoach(selectedRequest)}
-                  disabled={promotingId === selectedRequest.id}
-                  className="flex-1 rounded-full bg-teal-500 py-2.5 text-sm font-medium text-white hover:bg-teal-600 transition disabled:opacity-60"
-                >
-                  {promotingId === selectedRequest.id ? "Promoting..." : "Approve & Promote"}
                 </button>
               </div>
             </div>

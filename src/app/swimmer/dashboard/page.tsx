@@ -3,6 +3,10 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/utils/supabase/client";
 import SwimmerHeader from "@/app/swimmer/components/SwimmerHeader";
+import SessionReflectionModal from "@/app/swimmer/components/SessionReflectionModal";
+import { fetchPendingReflections, type PendingReflection } from "@/utils/swimmerReflection";
+import { formatTime as formatClassTime } from "@/utils/termSchedule";
+import { formatDateLong } from "@/utils/attendance";
 
 interface SwimmerData {
   id: string;
@@ -69,9 +73,27 @@ export default function SwimmerDashboardPage() {
   const [selectedSession, setSelectedSession] = useState<SwimmerSession | null>(null);
   const [showSessionModal, setShowSessionModal] = useState(false);
 
+  // Classes waiting for the swimmer's emoji reflection
+  const [pendingReflections, setPendingReflections] = useState<PendingReflection[]>([]);
+  const [showAllPending, setShowAllPending] = useState(false);
+  const [reflecting, setReflecting] = useState<PendingReflection | null>(null);
+
   useEffect(() => {
     fetchDashboard();
   }, []);
+
+  useEffect(() => {
+    if (swimmer) loadPendingReflections(swimmer.id);
+  }, [swimmer?.id]);
+
+  // Non-fatal: the reminder is a nice-to-have, so a failed lookup just hides it.
+  const loadPendingReflections = async (swimmerId: string) => {
+    try {
+      setPendingReflections(await fetchPendingReflections(createClient(), swimmerId));
+    } catch {
+      setPendingReflections([]);
+    }
+  };
 
   useEffect(() => {
     if (showCalendar && swimmer) {
@@ -316,6 +338,69 @@ export default function SwimmerDashboardPage() {
       </div>
 
       <div className="px-6 space-y-6 pb-8">
+        {/* Reflection reminder */}
+        {pendingReflections.length > 0 && (
+          <div className="rounded-xl border border-teal-100 bg-white p-4 shadow-sm">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <div>
+                <h2 className="font-semibold text-gray-800">&#128172; How did your sessions go?</h2>
+                <p className="text-xs text-gray-500">
+                  {pendingReflections.length === 1
+                    ? "1 session is waiting for your reflection."
+                    : `${pendingReflections.length} sessions are waiting for your reflection.`}
+                </p>
+              </div>
+              <span className="rounded-full bg-teal-500 px-2 py-0.5 text-xs text-white">{pendingReflections.length}</span>
+            </div>
+            <div className="space-y-2">
+              {(showAllPending ? pendingReflections : pendingReflections.slice(0, 3)).map((p) => (
+                <div
+                  key={`${p.groupId}-${p.lessonDate}`}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-gray-50 px-3 py-2.5"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-gray-800">{p.className}</p>
+                    <p className="text-xs text-gray-500">
+                      {formatDateLong(p.lessonDate)} · {formatClassTime(p.startTime)}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setReflecting(p)}
+                    className="rounded-full bg-teal-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-600"
+                  >
+                    Add my reflection
+                  </button>
+                </div>
+              ))}
+            </div>
+            {pendingReflections.length > 3 && (
+              <button
+                type="button"
+                onClick={() => setShowAllPending((v) => !v)}
+                className="mt-2 text-xs text-teal-600 underline hover:text-teal-700"
+              >
+                {showAllPending ? "Show fewer" : `Show all ${pendingReflections.length}`}
+              </button>
+            )}
+          </div>
+        )}
+
+        {reflecting && (
+          <SessionReflectionModal
+            swimmerId={swimmer.id}
+            groupId={reflecting.groupId}
+            lessonDate={reflecting.lessonDate}
+            className={reflecting.className}
+            initial={null}
+            onClose={() => setReflecting(null)}
+            onSaved={() => {
+              setReflecting(null);
+              loadPendingReflections(swimmer.id);
+            }}
+          />
+        )}
+
         {/* Skills Progress */}
         <div>
           <h2 className="mb-3 font-semibold text-gray-800">Skills Progress</h2>
