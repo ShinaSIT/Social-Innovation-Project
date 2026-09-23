@@ -55,9 +55,17 @@ export async function POST(request: NextRequest) {
 
   if (inviteError || !invited.user) {
     await admin.from("coach_invites").delete().eq("email", email);
+    console.error("inviteUserByEmail failed:", inviteError?.name, inviteError?.status, inviteError?.message);
     const exists = inviteError?.message.toLowerCase().includes("already been registered");
+    // On any 5xx from Supabase Auth, auth-js doesn't read the response body and
+    // the message comes through as "{}", so report the status instead. The real
+    // reason is in the Supabase Auth logs.
+    const serverError = inviteError?.status !== undefined && inviteError.status >= 500;
+    const detail = serverError
+      ? `Supabase Auth returned an error (HTTP ${inviteError!.status}). Check the Auth logs in Supabase for the reason — usually the invite email failing to send, or a database trigger failing while creating the user.`
+      : inviteError?.message ?? "unknown error";
     return NextResponse.json(
-      { error: exists ? "An account with this email already exists." : "Could not send invite: " + (inviteError?.message ?? "unknown error") },
+      { error: exists ? "An account with this email already exists." : "Could not send invite: " + detail },
       { status: exists ? 409 : 500 }
     );
   }
