@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
+import CoachHeader from "@/app/coach/components/CoachHeader";
 
 const CONDITIONS = ["Autism", "Intellectual Disability", "Physically Disabled", "Down Syndrome", "Others", "None"];
 
@@ -93,7 +94,9 @@ export default function AddStudentPage() {
   };
 
   return (
-    <div className="min-h-screen page-shell-narrow bg-gray-50 p-6 pb-12">
+    <div className="min-h-screen page-shell-narrow bg-gray-50">
+      <CoachHeader />
+      <div id="main-content" tabIndex={-1} className="p-6 pb-12">
       <div className="mb-6 flex items-center gap-2">
         <Link href="/coach/students" className="text-gray-400 hover:text-gray-600">&larr;</Link>
         <h1 className="text-xl font-bold text-gray-800">Add Student</h1>
@@ -225,6 +228,7 @@ export default function AddStudentPage() {
             {saving ? "Adding…" : "Add Student"}
           </button>
         </div>
+      </div>
       </div>
     </div>
   );

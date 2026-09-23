@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
+import CoachHeader from "@/app/coach/components/CoachHeader";
 
 type CertStatus = "not_submitted" | "pending" | "verified" | "rejected";
 
@@ -99,7 +100,9 @@ export default function CertificationPage() {
   const banner = statusBanner[submitted ? "pending" : status];
 
   return (
-    <div className="min-h-screen page-shell-narrow bg-gray-50 p-6 pb-12">
+    <div className="min-h-screen page-shell-narrow bg-gray-50">
+      <CoachHeader />
+      <div id="main-content" tabIndex={-1} className="p-6 pb-12">
       <div className="mb-6 flex items-center gap-2">
         <Link href="/coach/students" className="text-gray-400 hover:text-gray-600">&larr;</Link>
         <h1 className="text-xl font-bold text-gray-800">Coaching Certification</h1>
@@ -205,6 +208,7 @@ export default function CertificationPage() {
           )}
         </div>
       )}
+      </div>
     </div>
   );
 }

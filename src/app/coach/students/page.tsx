@@ -244,16 +244,22 @@ export default function MyStudentsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen page-shell bg-gray-50 flex items-center justify-center">
-        <p className="text-sm text-gray-500">Loading students...</p>
+      <div className="min-h-screen page-shell bg-gray-50">
+        <CoachHeader />
+        <div className="flex items-center justify-center px-6 py-16">
+              <p className="text-sm text-gray-500">Loading students...</p>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen page-shell bg-gray-50 flex items-center justify-center">
-        <p className="text-sm text-red-500">{error}</p>
+      <div className="min-h-screen page-shell bg-gray-50">
+        <CoachHeader />
+        <div className="flex items-center justify-center px-6 py-16">
+              <p className="text-sm text-red-500">{error}</p>
+        </div>
       </div>
     );
   }

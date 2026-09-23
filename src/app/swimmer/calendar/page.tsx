@@ -8,6 +8,7 @@ import { SESSION_STATUS_OPTIONS, formatDateLong } from "@/utils/attendance";
 import type { ReflectionAnswers } from "@/utils/swimmerReflection";
 import ReflectionEmojis from "@/app/components/ReflectionEmojis";
 import SessionReflectionModal from "@/app/swimmer/components/SessionReflectionModal";
+import { resolveSwimmerId } from "@/utils/currentSwimmer";
 
 interface MyGroup {
   id: string;
@@ -55,21 +56,6 @@ function statusLabel(status: string) {
 }
 
 type Supabase = ReturnType<typeof createClient>;
-
-// Which swimmer this viewer sees: themself, or (for a caregiver account) the
-// swimmer they're linked to via caregiver_swimmers.
-async function resolveSwimmerId(supabase: Supabase): Promise<string> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated.");
-
-  const { data: caregiverLinks } = await supabase
-    .from("caregiver_swimmers")
-    .select("swimmer_id")
-    .eq("caregiver_id", user.id)
-    .limit(1);
-
-  return caregiverLinks && caregiverLinks.length > 0 ? caregiverLinks[0].swimmer_id : user.id;
-}
 
 // All classes/groups this swimmer is in that actually run on `dateStr`,
 // with coaches (regular or that date's substitute), session status, and the

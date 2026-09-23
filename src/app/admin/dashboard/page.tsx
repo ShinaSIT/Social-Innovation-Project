@@ -6,7 +6,6 @@ import { createClient } from "@/utils/supabase/client";
 import AdminHeader from "@/app/admin/components/AdminHeader";
 import Pagination from "@/app/components/Pagination";
 import { useFocusTrap } from "@/app/hooks/useFocusTrap";
-import LogoutButton from "@/components/LogoutButton";
 
 const AT_RISK_PAGE_SIZE = 5;
 
@@ -537,16 +536,22 @@ export default function AdminDashboardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen page-shell bg-gray-50 flex items-center justify-center">
-        <p className="text-sm text-gray-500">Loading dashboard...</p>
+      <div className="min-h-screen page-shell bg-gray-50">
+        <AdminHeader />
+        <div className="flex items-center justify-center px-6 py-16">
+              <p className="text-sm text-gray-500">Loading dashboard...</p>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen page-shell bg-gray-50 flex items-center justify-center">
-        <p className="text-sm text-red-500">{error}</p>
+      <div className="min-h-screen page-shell bg-gray-50">
+        <AdminHeader />
+        <div className="flex items-center justify-center px-6 py-16">
+              <p className="text-sm text-red-500">{error}</p>
+        </div>
       </div>
     );
   }
@@ -575,7 +580,6 @@ export default function AdminDashboardPage() {
             >
               <span aria-hidden="true">&#128202;</span> Generate Reports
             </Link>
-            <LogoutButton />
           </div>
         </div>
 
