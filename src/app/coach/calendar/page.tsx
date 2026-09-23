@@ -136,11 +136,13 @@ export default function CoachCalendarPage() {
         { data: sessionLogs },
         { data: sessionSwimmers },
         { data: coachAttendance },
+        { data: swimmerReflections },
       ] = await Promise.all([
         supabase.from("class_group_swimmers").select("group_id, swimmer_id").in("group_id", myGroupIds),
         supabase.from("class_session_logs").select("class_group_id, status, status_reason").in("class_group_id", myGroupIds).eq("lesson_date", dateStr),
         supabase.from("class_session_swimmers").select("class_group_id, swimmer_id, present, absence_reason, absence_note, attachment_path").in("class_group_id", myGroupIds).eq("lesson_date", dateStr),
         supabase.from("class_coach_attendance").select("class_group_id, coach_id, attended, absence_reason, absence_note, attachment_path").in("class_group_id", myGroupIds).eq("lesson_date", dateStr),
+        supabase.from("swimmer_session_reflections").select("class_group_id, swimmer_id, feeling, difficulty, self_rating").in("class_group_id", myGroupIds).eq("lesson_date", dateStr),
       ]);
 
       const coachIds = Array.from(
@@ -187,6 +189,7 @@ export default function CoachCalendarPage() {
 
             const swimmers: SwimmerRow[] = roster.map((r) => {
               const record = (sessionSwimmers ?? []).find((s) => s.class_group_id === g.id && s.swimmer_id === r.swimmer_id);
+              const reflection = (swimmerReflections ?? []).find((s) => s.class_group_id === g.id && s.swimmer_id === r.swimmer_id);
               return {
                 id: r.swimmer_id,
                 name: nameMap.get(r.swimmer_id) ?? "Unknown",
@@ -196,6 +199,9 @@ export default function CoachCalendarPage() {
                 absence_reason: (record?.absence_reason as "mc" | "other" | null) ?? null,
                 absence_note: record?.absence_note ?? "",
                 attachment_path: record?.attachment_path ?? null,
+                reflection: reflection
+                  ? { feeling: reflection.feeling, difficulty: reflection.difficulty, self_rating: reflection.self_rating }
+                  : null,
               };
             });
 

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { formatTime } from "@/utils/termSchedule";
+import ReflectionEmojis from "@/app/components/ReflectionEmojis";
 import {
   DayClass,
   SESSION_STATUS_OPTIONS,
@@ -375,6 +376,11 @@ export default function ClassAttendanceCard({
                                 <span className="text-sm font-medium text-gray-700">{s.name}</span>
                                 <span className="text-xs text-gray-400">{s.level ? `Level ${s.level}` : "Not yet assessed"}</span>
                               </div>
+                              {s.reflection && (
+                                <span className="text-base leading-none" title="Swimmer's reflection">
+                                  <ReflectionEmojis r={s.reflection} />
+                                </span>
+                              )}
                             </div>
                             {!s.present && (
                               <div className="mt-2 flex flex-wrap items-center gap-2 pl-1">

@@ -2,6 +2,8 @@
 // used by both the calendar page (List + Calendar views) and the
 // ClassAttendanceCard component so the two stay in sync automatically.
 
+import type { ReflectionAnswers } from "@/utils/swimmerReflection";
+
 export interface CoachDay {
   id: string;
   name: string;
@@ -22,6 +24,8 @@ export interface SwimmerRow {
   absence_reason: "mc" | "other" | null;
   absence_note: string;
   attachment_path: string | null;
+  // The swimmer's own emoji reflection on this lesson, if they've done one.
+  reflection: ReflectionAnswers | null;
 }
 
 export interface GroupDay {
