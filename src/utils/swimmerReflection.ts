@@ -77,21 +77,25 @@ function localISODate(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-// Classes the swimmer had in the last PENDING_REFLECTION_DAYS days (today's
+// Classes the swimmer had in the last `days` days (or ever, if null; today's
 // only once they've started) that they haven't reflected on -- skipping
 // cancelled lessons and ones they were marked absent for. Newest first.
 // Does the whole date range in a fixed handful of queries rather than
 // per-date, since the calendar's per-day loader would be ~8 queries a day.
 export async function fetchPendingReflections(
   supabase: SupabaseClient,
-  swimmerId: string
+  swimmerId: string,
+  days: number | null = PENDING_REFLECTION_DAYS
 ): Promise<PendingReflection[]> {
   const fallbackId = ["00000000-0000-0000-0000-000000000000"];
   const now = new Date();
   const today = localISODate(now);
-  const from = new Date(now);
-  from.setDate(from.getDate() - PENDING_REFLECTION_DAYS);
-  const fromDate = localISODate(from);
+  let fromDate = "0001-01-01";
+  if (days !== null) {
+    const from = new Date(now);
+    from.setDate(from.getDate() - days);
+    fromDate = localISODate(from);
+  }
   const nowTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 
   const { data: myGroupRows } = await supabase
@@ -194,4 +198,60 @@ export async function fetchPendingReflections(
   return pending.sort(
     (a, b) => b.lessonDate.localeCompare(a.lessonDate) || b.startTime.localeCompare(a.startTime)
   );
+}
+
+export interface SwimmerReflectionEntry extends ReflectionAnswers {
+  id: string;
+  groupId: string;
+  lessonDate: string;
+  className: string;
+  groupName: string;
+  startTime: string | null;
+}
+
+// Every reflection the swimmer has made, with class names, newest first.
+export async function fetchSwimmerReflections(
+  supabase: SupabaseClient,
+  swimmerId: string
+): Promise<SwimmerReflectionEntry[]> {
+  const fallbackId = ["00000000-0000-0000-0000-000000000000"];
+  const { data: rows, error } = await supabase
+    .from("swimmer_session_reflections")
+    .select("id, class_group_id, lesson_date, feeling, difficulty, self_rating")
+    .eq("swimmer_id", swimmerId);
+  if (error) throw new Error("Failed to load reflections: " + error.message);
+
+  const groupIds = Array.from(new Set((rows ?? []).map((r) => r.class_group_id as string)));
+  const { data: groupRows } = await supabase
+    .from("class_groups")
+    .select("id, class_id, group_name")
+    .in("id", groupIds.length ? groupIds : fallbackId);
+  const classIds = Array.from(new Set((groupRows ?? []).map((g) => g.class_id as string)));
+  const { data: classRows } = await supabase
+    .from("classes")
+    .select("id, name, start_time")
+    .in("id", classIds.length ? classIds : fallbackId);
+
+  const groupMap = new Map((groupRows ?? []).map((g) => [g.id as string, g]));
+  const classMap = new Map((classRows ?? []).map((c) => [c.id as string, c]));
+
+  return (rows ?? [])
+    .map((r) => {
+      const group = groupMap.get(r.class_group_id);
+      const cls = group ? classMap.get(group.class_id) : undefined;
+      return {
+        id: r.id,
+        groupId: r.class_group_id,
+        lessonDate: r.lesson_date,
+        className: cls?.name ?? "Class",
+        groupName: group?.group_name ?? "",
+        startTime: cls?.start_time ?? null,
+        feeling: r.feeling,
+        difficulty: r.difficulty,
+        self_rating: r.self_rating,
+      };
+    })
+    .sort(
+      (a, b) => b.lessonDate.localeCompare(a.lessonDate) || (b.startTime ?? "").localeCompare(a.startTime ?? "")
+    );
 }

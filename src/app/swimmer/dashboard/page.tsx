@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
 import SwimmerHeader from "@/app/swimmer/components/SwimmerHeader";
 import SessionReflectionModal from "@/app/swimmer/components/SessionReflectionModal";
@@ -75,7 +76,6 @@ export default function SwimmerDashboardPage() {
 
   // Classes waiting for the swimmer's emoji reflection
   const [pendingReflections, setPendingReflections] = useState<PendingReflection[]>([]);
-  const [showAllPending, setShowAllPending] = useState(false);
   const [reflecting, setReflecting] = useState<PendingReflection | null>(null);
 
   useEffect(() => {
@@ -292,16 +292,22 @@ export default function SwimmerDashboardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen page-shell bg-gray-50 flex items-center justify-center">
-        <p className="text-sm text-gray-500">Loading dashboard...</p>
+      <div className="min-h-screen page-shell bg-gray-50">
+        <SwimmerHeader />
+        <div className="flex items-center justify-center px-6 py-16">
+              <p className="text-sm text-gray-500">Loading dashboard...</p>
+        </div>
       </div>
     );
   }
 
   if (error || !swimmer) {
     return (
-      <div className="min-h-screen page-shell bg-gray-50 flex items-center justify-center">
-        <p className="text-sm text-red-500">{error ?? "Could not load dashboard."}</p>
+      <div className="min-h-screen page-shell bg-gray-50">
+        <SwimmerHeader />
+        <div className="flex items-center justify-center px-6 py-16">
+              <p className="text-sm text-red-500">{error ?? "Could not load dashboard."}</p>
+        </div>
       </div>
     );
   }
@@ -353,7 +359,7 @@ export default function SwimmerDashboardPage() {
               <span className="rounded-full bg-teal-500 px-2 py-0.5 text-xs text-white">{pendingReflections.length}</span>
             </div>
             <div className="space-y-2">
-              {(showAllPending ? pendingReflections : pendingReflections.slice(0, 3)).map((p) => (
+              {pendingReflections.slice(0, 3).map((p) => (
                 <div
                   key={`${p.groupId}-${p.lessonDate}`}
                   className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-gray-50 px-3 py-2.5"
@@ -374,15 +380,14 @@ export default function SwimmerDashboardPage() {
                 </div>
               ))}
             </div>
-            {pendingReflections.length > 3 && (
-              <button
-                type="button"
-                onClick={() => setShowAllPending((v) => !v)}
-                className="mt-2 text-xs text-teal-600 underline hover:text-teal-700"
-              >
-                {showAllPending ? "Show fewer" : `Show all ${pendingReflections.length}`}
-              </button>
-            )}
+            <Link
+              href="/swimmer/reflections"
+              className="mt-2 inline-block text-xs text-teal-600 underline hover:text-teal-700"
+            >
+              {pendingReflections.length > 3
+                ? `See all ${pendingReflections.length} in My Reflections`
+                : "Go to My Reflections"}
+            </Link>
           </div>
         )}
 

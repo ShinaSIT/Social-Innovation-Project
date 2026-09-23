@@ -4,9 +4,15 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
+import CoachHeader from "@/app/coach/components/CoachHeader";
 import { formatTime } from "@/utils/termSchedule";
 import { formatDateLong } from "@/utils/attendance";
-import { REFLECTION_QUESTIONS, reflectionOption, type ReflectionAnswers } from "@/utils/swimmerReflection";
+import {
+  REFLECTION_QUESTIONS,
+  reflectionOption,
+  fetchSwimmerReflections,
+  type SwimmerReflectionEntry,
+} from "@/utils/swimmerReflection";
 
 type Tab = "progress" | "reflections" | "self_reflections" | "sensory" | "milestones" | "personal";
 
@@ -36,15 +42,6 @@ interface Reflection {
   parent_feedback: string | null;
   mood: string | null;
   created_at: string;
-}
-
-// The swimmer's own emoji reflection on one class lesson.
-interface SelfReflection extends ReflectionAnswers {
-  id: string;
-  lesson_date: string;
-  className: string;
-  groupName: string;
-  startTime: string | null;
 }
 
 interface SensoryProfile {
@@ -272,7 +269,7 @@ function ReflectionsTab({ reflections, studentId }: { reflections: Reflection[];
   );
 }
 
-function SelfReflectionsTab({ reflections }: { reflections: SelfReflection[] }) {
+function SelfReflectionsTab({ reflections }: { reflections: SwimmerReflectionEntry[] }) {
   if (reflections.length === 0) {
     return (
       <p className="text-sm text-gray-500 text-center py-8">
@@ -290,7 +287,7 @@ function SelfReflectionsTab({ reflections }: { reflections: SelfReflection[] }) 
         {reflections.map((r) => (
           <div key={r.id} className="rounded-xl bg-white p-4 shadow-sm">
             <div className="mb-3">
-              <p className="text-sm font-medium text-gray-800">{formatDateLong(r.lesson_date)}</p>
+              <p className="text-sm font-medium text-gray-800">{formatDateLong(r.lessonDate)}</p>
               <p className="text-xs text-gray-500">
                 {r.className}
                 {r.groupName ? ` (${r.groupName})` : ""}
@@ -465,7 +462,7 @@ export default function StudentProfilePage() {
   const [student, setStudent] = useState<Student | null>(null);
   const [skills, setSkills] = useState<SkillProgress[]>([]);
   const [reflections, setReflections] = useState<Reflection[]>([]);
-  const [selfReflections, setSelfReflections] = useState<SelfReflection[]>([]);
+  const [selfReflections, setSelfReflections] = useState<SwimmerReflectionEntry[]>([]);
   const [sensoryProfile, setSensoryProfile] = useState<SensoryProfile | null>(null);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [personalDetails, setPersonalDetails] = useState<PersonalDetails | null>(null);
@@ -519,48 +516,9 @@ export default function StudentProfilePage() {
 
       setReflections(reflectionsData ?? []);
 
-      // The swimmer's own emoji reflections, with class names. Non-fatal: if
-      // this fails the tab just shows as empty.
-      const fallbackId = ["00000000-0000-0000-0000-000000000000"];
-      const { data: selfRows } = await supabase
-        .from("swimmer_session_reflections")
-        .select("id, class_group_id, lesson_date, feeling, difficulty, self_rating")
-        .eq("swimmer_id", studentId)
-        .order("lesson_date", { ascending: false });
-      const selfGroupIds = Array.from(new Set((selfRows ?? []).map((r) => r.class_group_id)));
-      const { data: selfGroupRows } = await supabase
-        .from("class_groups")
-        .select("id, class_id, group_name")
-        .in("id", selfGroupIds.length ? selfGroupIds : fallbackId);
-      const selfClassIds = Array.from(new Set((selfGroupRows ?? []).map((g) => g.class_id)));
-      const { data: selfClassRows } = await supabase
-        .from("classes")
-        .select("id, name, start_time")
-        .in("id", selfClassIds.length ? selfClassIds : fallbackId);
-      const selfGroupMap = new Map((selfGroupRows ?? []).map((g) => [g.id, g]));
-      const selfClassMap = new Map((selfClassRows ?? []).map((c) => [c.id, c]));
-
-      setSelfReflections(
-        (selfRows ?? [])
-          .map((r) => {
-            const group = selfGroupMap.get(r.class_group_id);
-            const cls = group ? selfClassMap.get(group.class_id) : undefined;
-            return {
-              id: r.id,
-              lesson_date: r.lesson_date,
-              className: cls?.name ?? "Class",
-              groupName: group?.group_name ?? "",
-              startTime: cls?.start_time ?? null,
-              feeling: r.feeling,
-              difficulty: r.difficulty,
-              self_rating: r.self_rating,
-            };
-          })
-          .sort(
-            (a, b) =>
-              b.lesson_date.localeCompare(a.lesson_date) || (b.startTime ?? "").localeCompare(a.startTime ?? "")
-          )
-      );
+      // The swimmer's own emoji reflections. Non-fatal: if this fails the tab
+      // just shows as empty.
+      setSelfReflections(await fetchSwimmerReflections(supabase, studentId).catch(() => []));
 
       const { data: sensoryData } = await supabase
         .from("swimmer_profiles")
@@ -753,22 +711,30 @@ export default function StudentProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen page-shell bg-gray-50 flex items-center justify-center">
-        <p className="text-sm text-gray-500">Loading student profile...</p>
+      <div className="min-h-screen page-shell bg-gray-50">
+        <CoachHeader />
+        <div className="flex items-center justify-center px-6 py-16">
+              <p className="text-sm text-gray-500">Loading student profile...</p>
+        </div>
       </div>
     );
   }
 
   if (error || !student) {
     return (
-      <div className="min-h-screen page-shell bg-gray-50 flex items-center justify-center">
-        <p className="text-sm text-red-500">{error ?? "Student not found."}</p>
+      <div className="min-h-screen page-shell bg-gray-50">
+        <CoachHeader />
+        <div className="flex items-center justify-center px-6 py-16">
+              <p className="text-sm text-red-500">{error ?? "Student not found."}</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen page-shell bg-gray-50 p-6">
+    <div className="min-h-screen page-shell bg-gray-50">
+      <CoachHeader />
+      <div id="main-content" tabIndex={-1} className="p-6">
       {/* Tier Upgrade Modal */}
       {tierUpgrade && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4">
@@ -889,6 +855,7 @@ export default function StudentProfilePage() {
       {activeTab === "sensory" && <SensoryTab profile={sensoryProfile} />}
       {activeTab === "milestones" && <MilestonesTab milestones={milestones} />}
       {activeTab === "personal" && <PersonalTab details={personalDetails} />}
+      </div>
     </div>
   );
 }

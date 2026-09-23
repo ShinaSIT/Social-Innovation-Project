@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
+import AdminHeader from "@/app/admin/components/AdminHeader";
 
 interface ToolkitItem {
   id: string;
@@ -324,14 +325,19 @@ export default function AdminToolkitPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen page-shell bg-gray-50 flex items-center justify-center">
-        <p className="text-sm text-gray-500">Loading toolkit...</p>
+      <div className="min-h-screen page-shell bg-gray-50">
+        <AdminHeader />
+        <div className="flex items-center justify-center px-6 py-16">
+              <p className="text-sm text-gray-500">Loading toolkit...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen page-shell bg-gray-50 p-6">
+    <div className="min-h-screen page-shell bg-gray-50">
+      <AdminHeader />
+      <div id="main-content" tabIndex={-1} className="p-6">
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
@@ -718,6 +724,7 @@ export default function AdminToolkitPage() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

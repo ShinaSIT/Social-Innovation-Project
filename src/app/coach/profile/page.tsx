@@ -277,16 +277,22 @@ export default function CoachProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen page-shell-narrow bg-gray-50 flex items-center justify-center">
-        <p className="text-sm text-gray-500">Loading profile...</p>
+      <div className="min-h-screen page-shell-narrow bg-gray-50">
+        <CoachHeader />
+        <div className="flex items-center justify-center px-6 py-16">
+              <p className="text-sm text-gray-500">Loading profile...</p>
+        </div>
       </div>
     );
   }
 
   if (error || !profile) {
     return (
-      <div className="min-h-screen page-shell-narrow bg-gray-50 flex items-center justify-center">
-        <p className="text-sm text-red-500">{error ?? "Profile not found."}</p>
+      <div className="min-h-screen page-shell-narrow bg-gray-50">
+        <CoachHeader />
+        <div className="flex items-center justify-center px-6 py-16">
+              <p className="text-sm text-red-500">{error ?? "Profile not found."}</p>
+        </div>
       </div>
     );
   }
