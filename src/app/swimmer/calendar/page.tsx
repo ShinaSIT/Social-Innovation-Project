@@ -5,6 +5,8 @@ import { createClient } from "@/utils/supabase/client";
 import SwimmerHeader from "@/app/swimmer/components/SwimmerHeader";
 import { formatTime, toLocalISODate, DAYS, MONTH_NAMES } from "@/utils/termSchedule";
 import { SESSION_STATUS_OPTIONS, formatDateLong } from "@/utils/attendance";
+import { REFLECTION_QUESTIONS, reflectionOption, type ReflectionAnswers } from "@/utils/swimmerReflection";
+import SessionReflectionModal from "@/app/swimmer/components/SessionReflectionModal";
 
 interface MyGroup {
   id: string;
@@ -19,6 +21,7 @@ interface MyGroup {
     absence_reason: "mc" | "other" | null;
     absence_note: string;
   };
+  myReflection: ReflectionAnswers | null;
 }
 
 interface MyClass {
@@ -133,11 +136,13 @@ async function fetchClassesForDate(
     { data: overrideRows },
     { data: logRows },
     { data: myAttendanceRows },
+    { data: myReflectionRows },
   ] = await Promise.all([
     supabase.from("class_group_coaches").select("group_id, coach_id").in("group_id", runningGroupIds),
     supabase.from("class_session_coaches").select("class_group_id, coach_id").in("class_group_id", runningGroupIds).eq("lesson_date", dateStr),
     supabase.from("class_session_logs").select("class_group_id, status, status_reason").in("class_group_id", runningGroupIds).eq("lesson_date", dateStr),
     supabase.from("class_session_swimmers").select("class_group_id, present, absence_reason, absence_note").in("class_group_id", runningGroupIds).eq("swimmer_id", swimmerId).eq("lesson_date", dateStr),
+    supabase.from("swimmer_session_reflections").select("class_group_id, feeling, difficulty, self_rating").in("class_group_id", runningGroupIds).eq("swimmer_id", swimmerId).eq("lesson_date", dateStr),
   ]);
 
   const coachIds = Array.from(
@@ -164,6 +169,7 @@ async function fetchClassesForDate(
           : (gcRows ?? []).filter((r) => r.group_id === g.id).map((r) => r.coach_id);
         const log = (logRows ?? []).find((l) => l.class_group_id === g.id);
         const myRecord = (myAttendanceRows ?? []).find((r) => r.class_group_id === g.id);
+        const myReflection = (myReflectionRows ?? []).find((r) => r.class_group_id === g.id);
         return {
           id: g.id,
           group_name: g.group_name,
@@ -177,6 +183,9 @@ async function fetchClassesForDate(
             absence_reason: (myRecord?.absence_reason as "mc" | "other" | null) ?? null,
             absence_note: myRecord?.absence_note ?? "",
           },
+          myReflection: myReflection
+            ? { feeling: myReflection.feeling, difficulty: myReflection.difficulty, self_rating: myReflection.self_rating }
+            : null,
         };
       });
       return {
@@ -191,7 +200,39 @@ async function fetchClassesForDate(
     .sort((a, b) => a.start_time.localeCompare(b.start_time));
 }
 
-function ClassCard({ c }: { c: MyClass }) {
+// A swimmer can reflect on a class once it has happened, unless it was
+// cancelled or they were marked absent.
+function canReflect(g: MyGroup, dateStr: string) {
+  if (dateStr > toLocalISODate(new Date())) return false;
+  if (g.status === "cancelled") return false;
+  if (g.myAttendance.hasRecord && !g.myAttendance.present) return false;
+  return true;
+}
+
+function ReflectionEmojis({ r }: { r: ReflectionAnswers }) {
+  return (
+    <span className="inline-flex gap-0.5">
+      {REFLECTION_QUESTIONS.map((q) => {
+        const o = reflectionOption(q.key, r[q.key]);
+        return o ? (
+          <span key={q.key} title={`${q.question} ${o.label}`} aria-label={`${q.question} ${o.label}`} role="img">
+            {o.emoji}
+          </span>
+        ) : null;
+      })}
+    </span>
+  );
+}
+
+function ClassCard({
+  c,
+  dateStr,
+  onReflect,
+}: {
+  c: MyClass;
+  dateStr: string;
+  onReflect: (c: MyClass, g: MyGroup) => void;
+}) {
   return (
     <div className="rounded-xl bg-white p-4 shadow-sm">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -236,6 +277,35 @@ function ClassCard({ c }: { c: MyClass }) {
                 </span>
               )}
             </div>
+            {canReflect(g, dateStr) && (
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-gray-50 pt-2">
+                {g.myReflection ? (
+                  <>
+                    <span className="flex items-center gap-2 text-xs text-gray-500">
+                      My reflection: <span className="text-lg leading-none"><ReflectionEmojis r={g.myReflection} /></span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onReflect(c, g)}
+                      className="text-xs text-teal-600 underline hover:text-teal-700"
+                    >
+                      Change
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-xs text-gray-500">How did this session go?</span>
+                    <button
+                      type="button"
+                      onClick={() => onReflect(c, g)}
+                      className="rounded-full bg-teal-500 px-3 py-1 text-xs font-medium text-white hover:bg-teal-600"
+                    >
+                      Add my reflection
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -262,6 +332,7 @@ function ClassRow({ c }: { c: MyClass }) {
           ) : (
             <span className="rounded-full bg-red-100 px-2 py-0.5 font-medium text-red-700">Absent</span>
           )}
+          {g.myReflection && <ReflectionEmojis r={g.myReflection} />}
         </div>
       ))}
     </div>
@@ -283,6 +354,7 @@ export default function SwimmerCalendarPage() {
 
   // Day view
   const [dayClasses, setDayClasses] = useState<MyClass[]>([]);
+  const [reflecting, setReflecting] = useState<{ c: MyClass; g: MyGroup } | null>(null);
 
   // Week view
   const [weekDays, setWeekDays] = useState<{ dateStr: string; classes: MyClass[] }[]>([]);
@@ -531,7 +603,9 @@ export default function SwimmerCalendarPage() {
             <p className="text-center text-sm text-gray-500 py-8">No classes scheduled for {formatDateLong(selectedDate)}.</p>
           ) : (
             <div className="space-y-3">
-              {dayClasses.map((c) => <ClassCard key={c.id} c={c} />)}
+              {dayClasses.map((c) => (
+                <ClassCard key={c.id} c={c} dateStr={selectedDate} onReflect={(c, g) => setReflecting({ c, g })} />
+              ))}
             </div>
           )
         ) : viewMode === "week" ? (
@@ -597,6 +671,21 @@ export default function SwimmerCalendarPage() {
           )
         )}
       </div>
+
+      {reflecting && swimmerId && (
+        <SessionReflectionModal
+          swimmerId={swimmerId}
+          groupId={reflecting.g.id}
+          lessonDate={selectedDate}
+          className={reflecting.c.name}
+          initial={reflecting.g.myReflection}
+          onClose={() => setReflecting(null)}
+          onSaved={() => {
+            setReflecting(null);
+            loadDay(swimmerId, selectedDate);
+          }}
+        />
+      )}
     </div>
   );
 }

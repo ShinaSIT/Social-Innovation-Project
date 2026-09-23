@@ -33,12 +33,21 @@ interface SwimmerRow {
   enrollments: Enrollment[];
 }
 
+interface NoClubSwimmer {
+  id: string;
+  name: string;
+  age: number | null;
+}
+
 export default function AdminSwimmersPage() {
   const [swimmers, setSwimmers] = useState<SwimmerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [unassignedOnly, setUnassignedOnly] = useState(false);
+  const [clubId, setClubId] = useState<string | null>(null);
+  const [noClubSwimmers, setNoClubSwimmers] = useState<NoClubSwimmer[]>([]);
+  const [addingId, setAddingId] = useState<string | null>(null);
 
   const loadData = async () => {
     const supabase = createClient();
@@ -56,6 +65,7 @@ export default function AdminSwimmersPage() {
       if (adminError) throw new Error("Failed to load admin profile.");
 
       const clubId = adminProfile?.club_id;
+      setClubId(clubId ?? null);
       const fallbackId = ["00000000-0000-0000-0000-000000000000"];
 
       const { data: swimmerRows, error: swimmersError } = await supabase
@@ -120,6 +130,32 @@ export default function AdminSwimmersPage() {
       })).sort((a, b) => a.name.localeCompare(b.name));
 
       setSwimmers(rows);
+
+      // Self-registered swimmers start with no club (handle_new_user() doesn't
+      // set one), so they never match the club filter above. List them so an
+      // admin can bring them into the club. Filter on role too: a promoted coach
+      // can still have a leftover swimmers row.
+      const { data: noClubRows } = await supabase
+        .from("swimmers")
+        .select("id, age")
+        .is("club_id", null);
+      const noClubIds = (noClubRows ?? []).map((s) => s.id);
+      const { data: noClubProfiles } = await supabase
+        .from("profiles")
+        .select("id, full_name, role")
+        .in("id", noClubIds.length ? noClubIds : fallbackId);
+      const noClubProfileMap = new Map((noClubProfiles ?? []).map((p) => [p.id, p]));
+
+      setNoClubSwimmers(
+        (noClubRows ?? [])
+          .filter((s) => noClubProfileMap.get(s.id)?.role === "swimmer")
+          .map((s) => ({
+            id: s.id,
+            name: noClubProfileMap.get(s.id)?.full_name ?? "Unknown",
+            age: s.age,
+          }))
+          .sort((a, b) => a.name.localeCompare(b.name))
+      );
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -181,6 +217,49 @@ export default function AdminSwimmersPage() {
     await loadData();
   };
 
+  const handleAddToClub = async (swimmer: NoClubSwimmer) => {
+    if (!clubId) return;
+    if (!window.confirm(`Add ${swimmer.name} to your club?`)) return;
+    setAddingId(swimmer.id);
+    const supabase = createClient();
+
+    const { data: updated, error: swimmerError } = await supabase
+      .from("swimmers")
+      .update({ club_id: clubId })
+      .eq("id", swimmer.id)
+      .is("club_id", null)
+      .select("id");
+    if (swimmerError || !updated?.length) {
+      window.alert(
+        swimmerError
+          ? "Couldn't add this student to your club: " + swimmerError.message
+          : "The update ran but changed nothing — the student may already have been added to a club."
+      );
+      setAddingId(null);
+      await loadData();
+      return;
+    }
+
+    // Keep profiles.club_id in step: shares_my_club() reads it before
+    // swimmers.club_id, so a mismatch hides the swimmer from coaches. This has
+    // to run after the swimmers update, which is what lets the same-club admin
+    // policy allow it.
+    const { data: profileUpdated, error: profileError } = await supabase
+      .from("profiles")
+      .update({ club_id: clubId })
+      .eq("id", swimmer.id)
+      .select("id");
+    if (profileError || !profileUpdated?.length) {
+      window.alert(
+        "The student was added to your club, but their profile's club couldn't be updated" +
+          (profileError ? ": " + profileError.message : " (a database permissions rule blocked it).")
+      );
+    }
+
+    setAddingId(null);
+    await loadData();
+  };
+
   const filteredSwimmers = useMemo(() => {
     return swimmers.filter((s) => {
       if (unassignedOnly && s.enrollments.length > 0) return false;
@@ -190,6 +269,10 @@ export default function AdminSwimmersPage() {
   }, [swimmers, unassignedOnly, search]);
 
   const unassignedCount = swimmers.filter((s) => s.enrollments.length === 0).length;
+
+  const filteredNoClubSwimmers = noClubSwimmers.filter(
+    (s) => !search.trim() || s.name.toLowerCase().includes(search.trim().toLowerCase())
+  );
 
   return (
     <div className="min-h-screen page-shell bg-gray-50">
@@ -224,6 +307,37 @@ export default function AdminSwimmersPage() {
 
         {error && (
           <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>
+        )}
+
+        {!loading && filteredNoClubSwimmers.length > 0 && (
+          <div className="mb-6 rounded-xl border border-amber-100 bg-amber-50 p-4">
+            <h2 className="font-semibold text-gray-800">Not in any club yet</h2>
+            <p className="mb-3 text-xs text-gray-500">
+              These students registered themselves and haven&apos;t joined a club. Add them to your club to
+              enrol them in classes and assign coaches.
+            </p>
+            <div className="space-y-2">
+              {filteredNoClubSwimmers.map((s) => (
+                <div
+                  key={s.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white px-4 py-3 shadow-sm"
+                >
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="font-medium text-gray-800">{s.name}</span>
+                    <span className="text-xs text-gray-500">{s.age ? `${s.age} yrs` : "Age not set"}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleAddToClub(s)}
+                    disabled={addingId !== null}
+                    className="rounded-full border border-teal-300 px-3 py-1 text-xs font-medium text-teal-600 hover:bg-teal-50 disabled:opacity-50"
+                  >
+                    {addingId === s.id ? "Adding..." : "Add to my club"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
         {loading ? (
