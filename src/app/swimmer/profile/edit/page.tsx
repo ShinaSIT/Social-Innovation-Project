@@ -185,24 +185,6 @@ export default function EditSwimmerProfilePage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  const [coachRequest, setCoachRequest] = useState<{
-    id: string;
-    status: string;
-    message: string | null;
-    qualifications: string | null;
-    experience: string | null;
-    certifications: string | null;
-  } | null>(null);
-  const [requestForm, setRequestForm] = useState({
-    message: "",
-    qualifications: "",
-    experience: "",
-    certifications: "",
-  });
-  const [requestSaving, setRequestSaving] = useState(false);
-  const [requestError, setRequestError] = useState<string | null>(null);
-  const [requestSuccess, setRequestSuccess] = useState<string | null>(null);
-  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   // Set when arriving straight from registration (?welcome=1).
   const [welcome, setWelcome] = useState(false);
 
@@ -235,23 +217,6 @@ export default function EditSwimmerProfilePage() {
       }
 
       setSwimmerId(targetSwimmerId);
-
-      // Fetch existing coach request
-      const { data: requestData } = await supabase
-        .from("coach_requests")
-        .select("id, status, message, qualifications, experience, certifications")
-        .eq("swimmer_id", targetSwimmerId)
-        .single();
-
-      if (requestData) {
-        setCoachRequest(requestData);
-        setRequestForm({
-          message: requestData.message ?? "",
-          qualifications: requestData.qualifications ?? "",
-          experience: requestData.experience ?? "",
-          certifications: requestData.certifications ?? "",
-        });
-      }
 
       const { data: profileData } = await supabase
         .from("profiles")
@@ -419,79 +384,6 @@ export default function EditSwimmerProfilePage() {
       setSaveError(err.message);
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleRequestSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setRequestError(null);
-    setRequestSuccess(null);
-
-    if (!requestForm.qualifications.trim()) { setRequestError("Please enter your qualifications."); return; }
-    if (!requestForm.experience.trim()) { setRequestError("Please enter your experience."); return; }
-    if (!requestForm.certifications.trim()) { setRequestError("Please enter your certifications."); return; }
-
-    setRequestSaving(true);
-    const supabase = createClient();
-
-    try {
-      if (coachRequest) {
-        const { error } = await supabase
-          .from("coach_requests")
-          .update({
-            message: requestForm.message || null,
-            qualifications: requestForm.qualifications.trim(),
-            experience: requestForm.experience.trim(),
-            certifications: requestForm.certifications.trim(),
-            status: "pending",
-          })
-          .eq("id", coachRequest.id);
-        if (error) throw new Error("Failed to update request.");
-      } else {
-        const { error } = await supabase
-          .from("coach_requests")
-          .insert({
-            swimmer_id: swimmerId,
-            message: requestForm.message || null,
-            qualifications: requestForm.qualifications.trim(),
-            experience: requestForm.experience.trim(),
-            certifications: requestForm.certifications.trim(),
-            status: "pending",
-          });
-        if (error) throw new Error("Failed to submit request.");
-      }
-
-      setRequestSuccess("Your coach application has been submitted successfully.");
-      await fetchProfile();
-    } catch (err: any) {
-      setRequestError(err.message);
-    } finally {
-      setRequestSaving(false);
-    }
-  };
-
-  const handleCancelRequest = async () => {
-    if (!coachRequest) return;
-    setRequestSaving(true);
-    setRequestError(null);
-
-    const supabase = createClient();
-
-    try {
-      const { error } = await supabase
-        .from("coach_requests")
-        .delete()
-        .eq("id", coachRequest.id);
-      if (error) throw new Error("Failed to cancel request.");
-
-      setCoachRequest(null);
-      setRequestForm({ message: "", qualifications: "", experience: "", certifications: "" });
-      setShowCancelConfirm(false);
-      setRequestSuccess("Your coach application has been cancelled.");
-    } catch (err: any) {
-      setRequestError(err.message);
-    } finally {
-      setRequestSaving(false);
     }
   };
 
@@ -815,141 +707,6 @@ export default function EditSwimmerProfilePage() {
           />
           <p className="mt-0.5 text-right text-xs text-gray-400">{form.additional_notes.length}/500</p>
         </div>
-
-        {/* Coach Application Section */}
-        <div className="rounded-xl bg-white p-4 shadow-sm">
-          <h2 className="mb-1 font-semibold text-gray-800">&#127941; Are you a Coach?</h2>
-          <p className="mb-4 text-xs text-gray-500">
-            Fill in your details below and submit an application to your club admin.
-          </p>
-
-          {coachRequest && (
-            <div className={`mb-4 rounded-lg px-4 py-3 text-sm ${coachRequest.status === "pending" ? "bg-amber-50 text-amber-700" :
-                coachRequest.status === "approved" ? "bg-teal-50 text-teal-700" :
-                  "bg-red-50 text-red-600"
-              }`}>
-              {coachRequest.status === "pending" && "Your application is pending review by the admin."}
-              {coachRequest.status === "approved" && "Your application has been approved!"}
-              {coachRequest.status === "rejected" && "Your application was not approved. You may update and resubmit."}
-            </div>
-          )}
-
-          <div className="space-y-4">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">
-                Qualifications <span className="text-red-400">*</span>
-              </label>
-              <textarea
-                value={requestForm.qualifications}
-                onChange={(e) => setRequestForm((prev) => ({ ...prev, qualifications: sanitize(e.target.value, 500) }))}
-                placeholder="e.g. Bachelor of Sports Science, Swimming Level 2 Instructor..."
-                rows={3}
-                disabled={coachRequest?.status === "pending"}
-                className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:border-teal-400 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
-              />
-              <p className="mt-0.5 text-right text-xs text-gray-400">{requestForm.qualifications.length}/500</p>
-            </div>
-
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">
-                Experience <span className="text-red-400">*</span>
-              </label>
-              <textarea
-                value={requestForm.experience}
-                onChange={(e) => setRequestForm((prev) => ({ ...prev, experience: sanitize(e.target.value, 500) }))}
-                placeholder="e.g. 3 years coaching children with special needs at a community pool..."
-                rows={3}
-                disabled={coachRequest?.status === "pending"}
-                className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:border-teal-400 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
-              />
-              <p className="mt-0.5 text-right text-xs text-gray-400">{requestForm.experience.length}/500</p>
-            </div>
-
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">
-                Certifications <span className="text-red-400">*</span>
-              </label>
-              <textarea
-                value={requestForm.certifications}
-                onChange={(e) => setRequestForm((prev) => ({ ...prev, certifications: sanitize(e.target.value, 500) }))}
-                placeholder="e.g. Singapore Swimming Association Level 1, First Aid Certified..."
-                rows={3}
-                disabled={coachRequest?.status === "pending"}
-                className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:border-teal-400 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
-              />
-              <p className="mt-0.5 text-right text-xs text-gray-400">{requestForm.certifications.length}/500</p>
-            </div>
-
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">
-                Additional Message <span className="text-gray-400 font-normal">(optional)</span>
-              </label>
-              <textarea
-                value={requestForm.message}
-                onChange={(e) => setRequestForm((prev) => ({ ...prev, message: sanitize(e.target.value, 500) }))}
-                placeholder="Anything else you'd like the admin to know..."
-                rows={2}
-                disabled={coachRequest?.status === "pending"}
-                className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:border-teal-400 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
-              />
-            </div>
-
-            {requestError && <p className="text-sm text-red-500">{requestError}</p>}
-            {requestSuccess && <p className="text-sm text-teal-600">{requestSuccess}</p>}
-
-            <div className="flex gap-3">
-              {coachRequest && (
-                <button
-                  type="button"
-                  onClick={() => setShowCancelConfirm(true)}
-                  disabled={requestSaving}
-                  className="rounded-lg border border-red-200 px-4 py-2.5 text-sm font-medium text-red-500 hover:bg-red-50 transition disabled:opacity-60"
-                >
-                  Cancel Application
-                </button>
-              )}
-              {coachRequest?.status !== "pending" && (
-                <button
-                  type="button"
-                  onClick={handleRequestSubmit}
-                  disabled={requestSaving}
-                  className="flex-1 rounded-lg bg-teal-500 py-2.5 text-sm font-medium text-white hover:bg-teal-600 transition disabled:opacity-60"
-                >
-                  {requestSaving ? "Submitting..." : coachRequest ? "Resubmit Application" : "Submit Application"}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Cancel Confirm Modal */}
-        {showCancelConfirm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4">
-            <div className="w-full max-w-sm rounded-xl bg-white shadow-xl p-6">
-              <h2 className="mb-2 font-semibold text-gray-800">Cancel Application</h2>
-              <p className="mb-6 text-sm text-gray-500">
-                Are you sure you want to cancel your coach application? You can reapply at any time.
-              </p>
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowCancelConfirm(false)}
-                  className="flex-1 rounded-full border border-gray-200 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50"
-                >
-                  Keep Application
-                </button>
-                <button
-                  type="button"
-                  onClick={handleCancelRequest}
-                  disabled={requestSaving}
-                  className="flex-1 rounded-full bg-red-500 py-2.5 text-sm font-medium text-white hover:bg-red-600 transition disabled:opacity-60"
-                >
-                  {requestSaving ? "Cancelling..." : "Yes, Cancel"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Consent */}
         <label className="flex items-start gap-2 cursor-pointer">

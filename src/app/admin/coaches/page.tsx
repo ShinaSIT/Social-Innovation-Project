@@ -79,6 +79,16 @@ export default function AdminCoachesPage() {
   const closeDetails = useCallback(() => setSelectedCoach(null), []);
   useFocusTrap(modalRef, selectedCoach !== null, closeDetails);
 
+  const [showInvite, setShowInvite] = useState(false);
+  const [inviteName, setInviteName] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviting, setInviting] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
+  const inviteModalRef = useRef<HTMLDivElement>(null);
+  const closeInvite = useCallback(() => setShowInvite(false), []);
+  useFocusTrap(inviteModalRef, showInvite, closeInvite);
+
   // Group the already date-then-time-sorted flat list into per-date sections
   // for display, so a date header shows once instead of repeating per class.
   const groupedDayDetails = useMemo(() => {
@@ -219,6 +229,36 @@ export default function AdminCoachesPage() {
       setDetailsLoading(false);
     }
   }, []);
+
+  const openInvite = () => {
+    setInviteName("");
+    setInviteEmail("");
+    setInviteError(null);
+    setShowInvite(true);
+  };
+
+  const handleInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setInviteError(null);
+    setInviting(true);
+    try {
+      const res = await fetch("/api/admin/invite-coach", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fullName: inviteName, email: inviteEmail }),
+      });
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(result.error ?? "Could not send invite.");
+
+      setShowInvite(false);
+      setInviteSuccess(`Invite sent to ${inviteEmail.trim()}.`);
+      await loadData(calendarYear, calendarMonth);
+    } catch (err: any) {
+      setInviteError(err.message);
+    } finally {
+      setInviting(false);
+    }
+  };
 
   const openDetails = (coach: CoachRow) => {
     setSelectedCoach({ id: coach.id, name: coach.name });
@@ -373,12 +413,25 @@ export default function AdminCoachesPage() {
       <div id="main-content" tabIndex={-1} className="p-6">
         <ClassesStudentsTabs />
 
-        <div className="mb-4">
-          <h1 className="text-xl font-bold text-gray-800">Coaches</h1>
-          <p className="text-sm text-gray-500">
-            Set each coach&apos;s rate, and see classes attended + total pay for a month.
-          </p>
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-bold text-gray-800">Coaches</h1>
+            <p className="text-sm text-gray-500">
+              Set each coach&apos;s rate, and see classes attended + total pay for a month.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={openInvite}
+            className="shrink-0 rounded-full bg-teal-500 px-4 py-2 text-sm font-medium text-white hover:bg-teal-600 transition"
+          >
+            + Invite Coach
+          </button>
         </div>
+
+        {inviteSuccess && (
+          <div className="mb-4 rounded-lg bg-teal-50 px-4 py-3 text-sm text-teal-700">{inviteSuccess}</div>
+        )}
 
         <div className="mb-4 flex items-center gap-3">
           <button
@@ -479,6 +532,81 @@ export default function AdminCoachesPage() {
           Counts classes where the coach was marked attended (including substitute dates) for the selected month.
         </p>
       </div>
+
+      {showInvite && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) closeInvite(); }}
+        >
+          <div
+            ref={inviteModalRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="invite-coach-title"
+            tabIndex={-1}
+            className="w-full max-w-md rounded-xl bg-white shadow-xl focus:outline-none"
+          >
+            <div className="flex items-center justify-between border-b border-gray-100 p-4">
+              <h2 id="invite-coach-title" className="font-semibold text-gray-800">Invite Coach</h2>
+              <button
+                type="button"
+                onClick={closeInvite}
+                className="text-gray-400 hover:text-gray-600"
+                aria-label="Close"
+              >
+                &times;
+              </button>
+            </div>
+            <form onSubmit={handleInvite} className="space-y-4 p-4">
+              <p className="text-xs text-gray-500">
+                The coach will get an email with a link to set their password and fill in their details.
+                They&apos;ll be added to your club.
+              </p>
+              <div>
+                <label htmlFor="invite-name" className="mb-1 block text-xs font-medium text-gray-600">Full Name</label>
+                <input
+                  id="invite-name"
+                  type="text"
+                  value={inviteName}
+                  onChange={(e) => setInviteName(e.target.value)}
+                  placeholder="Jane Smith"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:border-teal-400 focus:outline-none"
+                  required
+                />
+              </div>
+              <div>
+                <label htmlFor="invite-email" className="mb-1 block text-xs font-medium text-gray-600">Email</label>
+                <input
+                  id="invite-email"
+                  type="email"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  placeholder="coach@example.com"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:border-teal-400 focus:outline-none"
+                  required
+                />
+              </div>
+              {inviteError && <p className="text-sm text-red-500">{inviteError}</p>}
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={closeInvite}
+                  className="flex-1 rounded-full border border-gray-200 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={inviting}
+                  className="flex-1 rounded-full bg-teal-500 py-2.5 text-sm font-medium text-white hover:bg-teal-600 transition disabled:opacity-60"
+                >
+                  {inviting ? "Sending..." : "Send Invite"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {selectedCoach && (
         <div

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createClient } from "@/utils/supabase/client";
 
 type Mode = "login" | "register";
@@ -49,6 +49,13 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Set by /auth/confirm when an invite link is invalid or has expired.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("error") === "invalid_link") {
+      setError("That invite link is invalid or has expired. Ask your club admin to send a new one.");
+    }
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -253,7 +260,7 @@ export default function LoginPage() {
         {mode === "register" && (
           <form onSubmit={handleRegister} className="space-y-4">
             <div className="rounded-lg bg-teal-50 px-4 py-3 text-xs text-teal-700">
-              New accounts are registered as swimmer accounts. To become a coach, register and contact your club admin.
+              New accounts are registered as swimmer accounts. Coach accounts are created by your club admin.
             </div>
 
             <div>

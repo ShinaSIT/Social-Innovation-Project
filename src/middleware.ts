@@ -32,6 +32,10 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
+  // Invite email link -- the user isn't signed in until this route verifies
+  // the token, and must not be bounced to a dashboard if they already are.
+  if (pathname === "/auth/confirm") return supabaseResponse;
+
   // Public routes that don't need auth
   const publicPaths = ["/login"];
   if (publicPaths.includes(pathname)) {

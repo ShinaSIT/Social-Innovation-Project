@@ -425,15 +425,16 @@ export default function StudentProfilePage() {
         .from("profiles")
         .select("id, full_name")
         .eq("id", studentId)
-        .single();
+        .maybeSingle();
 
       const { data: swimmerData, error: swimmerError } = await supabase
         .from("swimmers")
         .select("age, level, category")
         .eq("id", studentId)
-        .single();
+        .maybeSingle();
 
       if (profileError || swimmerError) throw new Error("Failed to load student.");
+      if (!profileData) throw new Error("Student profile not found or not accessible.");
 
       setStudent({
         id: profileData.id,
